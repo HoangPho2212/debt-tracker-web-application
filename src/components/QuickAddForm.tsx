@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Minus, Check, User, DollarSign, FileText, Phone, Sparkles } from 'lucide-react';
+import { Plus, Minus, Check, User, DollarSign, FileText, Phone, } from 'lucide-react';
 import { CreateDebtInput, DebtorRecord, AppSettings } from '../types/contracts';
 import { formatCurrency } from '../utils/formatters';
 import { CreateDebtContract } from '../contracts/debtContract';
@@ -12,7 +12,7 @@ interface QuickAddFormProps {
   presetCustomerName?: string;
 }
 
-const COMMON_NOTES = ['Cơm sườn', 'Cơm gà', 'Thêm trứng', 'Mang về', 'Suất đặc biệt', 'Nước ngọt'];
+const COMMON_NOTES = ['Cơm sườn', 'Cơm gà', 'Thêm trứng', 'Thêm cơm', 'Mang về', 'tại quán'];
 
 export const QuickAddForm: React.FC<QuickAddFormProps> = ({
   settings,
@@ -98,7 +98,6 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
     <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-md transition-all">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-emerald-600" />
           {presetCustomerName ? `Ghi Thêm Nợ Cho: ${presetCustomerName}` : 'Ghi Nợ Suất Cơm Mới'}
         </h2>
         {onCancel && (
@@ -322,7 +321,7 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
             className="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
           >
             <Check className="w-5 h-5" />
-            <span>+ GHI NỢ NGAY ({formatCurrency(totalAmount)})</span>
+            <span>GHI NỢ NGAY ({formatCurrency(totalAmount)})</span>
           </button>
         </div>
       </form>
