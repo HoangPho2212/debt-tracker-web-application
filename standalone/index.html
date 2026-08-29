@@ -22,12 +22,57 @@
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
 
   <!-- ============================================================================== -->
-  <!-- ⚙️ CẤU HÌNH LIÊN KẾT GOOGLE SHEETS TẠI ĐÂY -->
+  <!-- ⚙️ CẤU HÌNH LIÊN KẾT GOOGLE SHEETS & MẬT KHẨU TẠI ĐÂY -->
   <!-- ============================================================================== -->
   <script>
     window.DEFAULT_GOOGLE_SHEET_URL = "";
     window.DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPQVci49QP2rWDUHkTRbSnra4OawodYLezXA4zgbR5oLlZM6uqMun7Q1r-Mvk4u7og/exec";
+    window.DEFAULT_APP_PASSWORD = "Laodaiquan123";
   </script>
+
+  <!-- MÀN HÌNH KHÓA BẢO VỆ (LOCK SCREEN) -->
+  <div id="lock-screen-container" class="fixed inset-0 z-50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-white rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/30 mx-auto text-2xl font-bold">
+          🍚
+        </div>
+        <div>
+          <h1 id="lock-screen-title" class="text-lg font-black text-slate-900 tracking-tight">
+            Sổ Ghi Nợ Quán Cơm
+          </h1>
+          <p class="text-xs font-medium text-slate-500 flex items-center justify-center gap-1 mt-0.5">
+            <span>🔒 Yêu cầu mật mã bảo vệ</span>
+          </p>
+        </div>
+      </div>
+
+      <form onsubmit="handleUnlockApp(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Mật khẩu mở khóa</label>
+          <div class="relative">
+            <input id="input-lock-password" type="password" required placeholder="Nhập mật khẩu..." class="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl text-base font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[48px]" autocomplete="current-password" />
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600">
+              <span id="eye-icon">👁️</span>
+            </button>
+          </div>
+          <div id="lock-error-msg" class="hidden text-xs font-semibold text-rose-600 mt-2 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl">
+            Mật khẩu không chính xác. Vui lòng thử lại.
+          </div>
+        </div>
+
+        <button type="submit" class="w-full min-h-[48px] py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm rounded-2xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer">
+          <span>🔓 MỞ KHÓA SỔ NỢ</span>
+        </button>
+      </form>
+
+      <div class="text-center pt-2 border-t border-slate-100">
+        <p class="text-[11px] text-slate-400">
+          Mỗi thiết bị chỉ cần mở khóa 1 lần. Dữ liệu được bảo mật an toàn.
+        </p>
+      </div>
+    </div>
+  </div>
 
   <!-- TOAST NOTIFICATIONS -->
   <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-11/12 max-w-md pointer-events-none"></div>
@@ -75,6 +120,11 @@
         <!-- Nút Cài Đặt -->
         <button onclick="openSettingsModal()" class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Cài đặt">
           <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Nút Khóa Ứng Dụng -->
+        <button onclick="handleLockApp()" class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Khóa ứng dụng">
+          <i data-lucide="lock" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
@@ -248,6 +298,8 @@
   <script>
     const STORAGE_KEY = 'QUAN_COM_DEBT_RECORDS_V1';
     const SETTINGS_KEY = 'QUAN_COM_SETTINGS_V1';
+    const AUTH_KEY = 'QUAN_COM_AUTH_TOKEN_V1';
+    const AUTH_VALID_TOKEN = 'AUTH_OK_LAODAIQUAN_V1';
 
     let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
@@ -264,6 +316,59 @@
     let activeFilter = 'active';
     let searchQuery = '';
     let syncStatus = settings.appsScriptUrl ? (settings.lastSyncedAt ? 'synced' : 'idle') : 'unconfigured';
+
+    // Authentication check
+    function isAppUnlocked() {
+      return localStorage.getItem(AUTH_KEY) === AUTH_VALID_TOKEN;
+    }
+
+    function checkAuth() {
+      const lockEl = document.getElementById('lock-screen-container');
+      if (isAppUnlocked()) {
+        lockEl.classList.add('hidden');
+      } else {
+        lockEl.classList.remove('hidden');
+        document.getElementById('lock-screen-title').innerText = settings.restaurantName;
+        document.getElementById('input-lock-password').focus();
+      }
+    }
+
+    function handleUnlockApp(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('input-lock-password').value;
+      const expected = window.DEFAULT_APP_PASSWORD || "Laodaiquan123";
+
+      if (pwd === expected) {
+        localStorage.setItem(AUTH_KEY, AUTH_VALID_TOKEN);
+        document.getElementById('lock-error-msg').classList.add('hidden');
+        document.getElementById('lock-screen-container').classList.add('hidden');
+        showToast('Đã mở khóa sổ nợ thành công.');
+        if (settings.appsScriptUrl) {
+          triggerManualPull(true);
+        }
+      } else {
+        document.getElementById('lock-error-msg').classList.remove('hidden');
+        document.getElementById('input-lock-password').value = '';
+      }
+    }
+
+    function handleLockApp() {
+      localStorage.removeItem(AUTH_KEY);
+      document.getElementById('lock-screen-container').classList.remove('hidden');
+      document.getElementById('input-lock-password').value = '';
+      document.getElementById('lock-error-msg').classList.add('hidden');
+    }
+
+    function togglePasswordVisibility() {
+      const inp = document.getElementById('input-lock-password');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        document.getElementById('eye-icon').innerText = '🙈';
+      } else {
+        inp.type = 'password';
+        document.getElementById('eye-icon').innerText = '👁️';
+      }
+    }
 
     function normalizeVi(str) {
       if (!str) return '';
@@ -300,13 +405,10 @@
       return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }
 
-    // PUSH: Gửi dữ liệu local lên Google Sheets
+    // PUSH
     let syncTimeout = null;
     function scheduleAutoPush() {
-      if (!settings.appsScriptUrl) {
-        updateSyncBadge('unconfigured');
-        return;
-      }
+      if (!isAppUnlocked() || !settings.appsScriptUrl) return;
       if (!navigator.onLine) {
         updateSyncBadge('offline');
         return;
@@ -341,9 +443,10 @@
       }, 1200);
     }
 
-    // PULL: Tải dữ liệu từ Google Sheets về máy & Merge thông minh
+    // PULL
     let isPulling = false;
     async function triggerManualPull(silent = false) {
+      if (!isAppUnlocked()) return;
       if (!settings.appsScriptUrl) {
         if (!silent) openSettingsModal();
         return;
@@ -356,7 +459,7 @@
       if (isPulling) return;
       isPulling = true;
 
-      updateSyncBadge('syncing');
+      if (!silent) updateSyncBadge('syncing');
       try {
         const res = await fetch(settings.appsScriptUrl.trim(), {
           method: 'GET',
@@ -366,7 +469,6 @@
         isPulling = false;
 
         if (data && Array.isArray(data.records)) {
-          // Merge dữ liệu Cloud với Local
           const mergedMap = new Map();
           data.records.forEach(c => {
             mergedMap.set(c.normalizedName || normalizeVi(c.name), c);
@@ -399,6 +501,8 @@
           if (!silent) {
             showToast(`Đã đồng bộ dữ liệu mới nhất từ Google Sheets (${records.length} khách).`);
           }
+        } else {
+          updateSyncBadge('synced');
         }
       } catch (err) {
         isPulling = false;
@@ -415,7 +519,7 @@
 
       if (status === 'syncing') {
         el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-          <span class="inline-block animate-spin-fast">🔄</span> <span>Đang đồng bộ...</span>
+          <span class="inline-block animate-spin-fast">🔄</span> <span>Đang lưu Sheets...</span>
         </span>`;
       } else if (status === 'synced') {
         const timeStr = time ? new Date(time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -700,22 +804,25 @@
     render();
     if (settings.appsScriptUrl) {
       updateSyncBadge(settings.lastSyncedAt ? 'synced' : 'idle', settings.lastSyncedAt);
-      // Tự động tải dữ liệu từ Google Sheets về máy khi mở app (Fetch on load)
-      triggerManualPull(true);
     }
     lucide.createIcons();
 
+    // KIỂM TRA MẬT KHẨU MỞ KHÓA
+    checkAuth();
+
     // AUTO-POLLING: Cứ mỗi 60 giây (1 phút) tự động làm mới ngầm từ Google Sheets
     setInterval(() => {
-      if (document.visibilityState === 'visible' && navigator.onLine && settings.appsScriptUrl) {
+      if (isAppUnlocked() && document.visibilityState === 'visible' && navigator.onLine && settings.appsScriptUrl) {
         triggerManualPull(true);
       }
     }, 60000);
 
     // BẮT SỰ KIỆN MẠNG
     window.addEventListener('online', () => {
-      showToast('Đã có mạng. Tự động đồng bộ 2 chiều với Google Sheets...');
-      triggerManualPull(true);
+      if (isAppUnlocked()) {
+        showToast('Đã có mạng. Tự động đồng bộ 2 chiều với Google Sheets...');
+        triggerManualPull(true);
+      }
     });
     window.addEventListener('offline', () => {
       updateSyncBadge('offline');

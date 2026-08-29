@@ -10,6 +10,7 @@ import {
   AlertCircle,
   WifiOff,
   ExternalLink,
+  Lock,
 } from 'lucide-react';
 import { AppSettings, SyncStatus } from '../types/contracts';
 
@@ -21,6 +22,7 @@ interface HeaderProps {
   onOpenBackup: () => void;
   onOpenQuickAdd: () => void;
   onManualSync?: () => void;
+  onLock?: () => void;
   isQuickAddOpen: boolean;
 }
 
@@ -32,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBackup,
   onOpenQuickAdd,
   onManualSync,
+  onLock,
   isQuickAddOpen,
 }) => {
   const hasSheetUrl = Boolean(settings.googleSheetUrl && settings.googleSheetUrl.trim());
@@ -41,7 +44,6 @@ export const Header: React.FC<HeaderProps> = ({
     if (hasSheetUrl) {
       window.open(settings.googleSheetUrl, '_blank', 'noopener,noreferrer');
     } else {
-      // If not configured, open Settings to prompt user
       onOpenSettings();
     }
   };
@@ -60,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span
             className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
             onClick={onManualSync}
-            title="Đã đồng bộ thời gian thực lên Google Sheets. Bấm để đồng bộ lại."
+            title="Đã đồng bộ 2 chiều lên Google Sheets. Bấm để làm mới ngay."
           >
             <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
             <span>
@@ -123,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-          {/* Nút Xem trong Trang tính (Google Sheets Viewer) */}
+          {/* Nút Xem trong Trang tính */}
           <button
             type="button"
             onClick={handleOpenGoogleSheet}
@@ -196,6 +198,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Settings className="w-4 h-4" />
           </button>
+
+          {/* Lock App Button */}
+          {onLock && (
+            <button
+              type="button"
+              onClick={onLock}
+              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200"
+              title="Khóa ứng dụng (Cần mật khẩu để mở lại)"
+              aria-label="Khóa ứng dụng"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </header>

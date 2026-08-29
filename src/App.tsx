@@ -4,6 +4,8 @@ import { DebtFilterType, DebtorViewState } from './types/viewState';
 import { StorageEngine, DEFAULT_SETTINGS } from './services/storage';
 import { DebtManager } from './services/debtManager';
 import { GoogleSheetsSyncEngine } from './services/googleSheetsSync';
+import { AuthEngine } from './services/auth';
+import { LockScreen } from './components/LockScreen';
 import { Header } from './components/Header';
 import { SummaryCards } from './components/SummaryCards';
 import { QuickAddForm } from './components/QuickAddForm';
@@ -18,6 +20,9 @@ import { formatCurrency, generateId } from './utils/formatters';
 import { PlusCircle, UtensilsCrossed, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
+  // Authentication & Passcode Lock state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => AuthEngine.isAuthenticated());
+
   // Persistence state
   const [records, setRecords] = useState<DebtorRecord[]>(() => StorageEngine.loadRecords());
   const [settings, setSettings] = useState<AppSettings>(() => StorageEngine.loadSettings());
@@ -52,15 +57,19 @@ export const App: React.FC = () => {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Auto persist records to LocalStorage
+  // Auto persist records to LocalStorage (only when authenticated)
   useEffect(() => {
-    StorageEngine.saveRecords(records);
-  }, [records]);
+    if (isAuthenticated) {
+      StorageEngine.saveRecords(records);
+    }
+  }, [records, isAuthenticated]);
 
-  // Auto persist settings to LocalStorage
+  // Auto persist settings to LocalStorage (only when authenticated)
   useEffect(() => {
-    StorageEngine.saveSettings(settings);
-  }, [settings]);
+    if (isAuthenticated) {
+      StorageEngine.saveSettings(settings);
+    }
+  }, [settings, isAuthenticated]);
 
   // Show Toast notification helper
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -95,7 +104,6 @@ export const App: React.FC = () => {
       if (result.success) {
         setSyncStatus('synced');
         setLastSyncedAt(result.syncedAt);
-        // Persist timestamp silently without re-triggering dependency changes
         StorageEngine.saveSettings({ ...targetSettings, lastSyncedAt: result.syncedAt });
       } else {
         setSyncStatus('error');
@@ -127,7 +135,7 @@ export const App: React.FC = () => {
       isPullingRef.current = false;
 
       if (result.success && result.records) {
-        isRemoteUpdateRef.current = true; // Mark as remote update to prevent echo push
+        isRemoteUpdateRef.current = true;
         setRecords((prevLocal) => {
           const merged = GoogleSheetsSyncEngine.mergeCloudAndLocalRecords(prevLocal, result.records!);
           return merged;
@@ -148,23 +156,22 @@ export const App: React.FC = () => {
         setSyncStatus('error');
         showToast(result.message, 'error');
       } else {
-        // Even if silent pull had no changes, reset status back to synced if already had url
         setSyncStatus('synced');
       }
     },
     [showToast]
   );
 
-  // FETCH ON LOAD: Tải dữ liệu từ Google Sheets về máy khi vừa mở app
+  // FETCH ON LOAD: Tải dữ liệu từ Google Sheets về máy khi vừa mở app (sau khi mở khóa)
   useEffect(() => {
-    if (settingsRef.current.appsScriptUrl) {
+    if (isAuthenticated && settingsRef.current.appsScriptUrl) {
       triggerGoogleSheetsPull(true);
     }
-  }, [triggerGoogleSheetsPull]);
+  }, [isAuthenticated, triggerGoogleSheetsPull]);
 
   // AUTO-POLLING: Cứ sau mỗi 60 giây (1 phút), tự động tải ngầm
   useEffect(() => {
-    if (!settings.appsScriptUrl) return;
+    if (!isAuthenticated || !settings.appsScriptUrl) return;
 
     const pollingInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
@@ -173,16 +180,17 @@ export const App: React.FC = () => {
     }, 60000);
 
     return () => clearInterval(pollingInterval);
-  }, [settings.appsScriptUrl, triggerGoogleSheetsPull]);
+  }, [isAuthenticated, settings.appsScriptUrl, triggerGoogleSheetsPull]);
 
   // AUTO-PUSH: Khi người dùng thao tác thay đổi records tại local, tự động đẩy lên Google Sheets (debounce 1.2s)
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
 
-    // If records changed because of pulling from cloud, do NOT push back!
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;
       return;
@@ -207,12 +215,12 @@ export const App: React.FC = () => {
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [records, settings.appsScriptUrl, triggerGoogleSheetsPush]);
+  }, [records, settings.appsScriptUrl, isAuthenticated, triggerGoogleSheetsPush]);
 
   // ONLINE / OFFLINE LISTENERS
   useEffect(() => {
     const handleOnline = () => {
-      if (settingsRef.current.appsScriptUrl) {
+      if (isAuthenticated && settingsRef.current.appsScriptUrl) {
         showToast('Đã có mạng trở lại. Đang tự động đồng bộ Google Sheets...', 'info');
         triggerGoogleSheetsPull(true);
       }
@@ -230,7 +238,13 @@ export const App: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [triggerGoogleSheetsPull, showToast]);
+  }, [isAuthenticated, triggerGoogleSheetsPull, showToast]);
+
+  // Handle Manual Lock Application
+  const handleLockApp = useCallback(() => {
+    AuthEngine.logout();
+    setIsAuthenticated(false);
+  }, []);
 
   // Projection ViewState
   const viewState = useMemo(() => {
@@ -339,12 +353,25 @@ export const App: React.FC = () => {
     triggerGoogleSheetsPull(false);
   };
 
+  // If device is not authenticated, render the Lock Screen!
+  if (!isAuthenticated) {
+    return (
+      <LockScreen
+        restaurantName={settings.restaurantName}
+        onUnlock={() => {
+          setIsAuthenticated(true);
+          showToast('Đã mở khóa sổ nợ thành công.', 'success');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Header with Google Sheets Viewer, Refresh & Sync Status */}
+      {/* Header with Google Sheets Viewer, Refresh, Lock & Settings */}
       <Header
         settings={settings}
         syncStatus={syncStatus}
@@ -353,6 +380,7 @@ export const App: React.FC = () => {
         onOpenBackup={() => setIsBackupRestoreOpen(true)}
         onOpenQuickAdd={() => setIsQuickAddOpen((prev) => !prev)}
         onManualSync={handleManualRefreshClick}
+        onLock={handleLockApp}
         isQuickAddOpen={isQuickAddOpen}
       />
 
