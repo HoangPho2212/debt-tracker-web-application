@@ -203,80 +203,22 @@ export const GoogleSheetsSyncEngine = {
   },
 
   /**
-   * Merge Strategy: Combines Local and Cloud records cleanly
+   * Merge Strategy: Google Sheets is the authoritative cloud database for the eatery.
+   * When pulling, cloud records accurately reflect all additions, settlements, and deletions.
    */
   mergeCloudAndLocalRecords(
     localRecords: DebtorRecord[],
     cloudRecords: DebtorRecord[]
   ): DebtorRecord[] {
-    if (!cloudRecords || cloudRecords.length === 0) {
-      return [];
-    }
+    if (!cloudRecords) return localRecords || [];
 
-    if (!localRecords || localRecords.length === 0) {
-      return cloudRecords.map((c) => ({
+    return cloudRecords
+      .map((c) => ({
         ...c,
         normalizedName: normalizeVietnamese(c.name),
-      }));
-    }
-
-    const mergedMap = new Map<string, DebtorRecord>();
-
-    // 1. Add all cloud records first indexed by strict normalized name
-    for (const cloud of cloudRecords) {
-      const normName = normalizeVietnamese(cloud.name);
-      mergedMap.set(normName, {
-        ...cloud,
-        normalizedName: normName,
+      }))
+      .sort((a, b) => {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-    }
-
-    // 2. Merge local records
-    for (const local of localRecords) {
-      const normName = normalizeVietnamese(local.name);
-      const existing = mergedMap.get(normName);
-
-      if (!existing) {
-        mergedMap.set(normName, {
-          ...local,
-          normalizedName: normName,
-        });
-      } else {
-        // Both exist: compare timestamps and merge histories
-        const localUpdated = new Date(local.updatedAt).getTime() || 0;
-        const cloudUpdated = new Date(existing.updatedAt).getTime() || 0;
-
-        // Combine history entries, deduping by entryId
-        const historyMap = new Map<string, import('../types/contracts').DebtHistoryEntry>();
-        for (const h of existing.history || []) {
-          historyMap.set(h.entryId, h);
-        }
-        for (const h of local.history || []) {
-          historyMap.set(h.entryId, h);
-        }
-        const mergedHistory = Array.from(historyMap.values()).sort((a, b) => {
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-        });
-
-        // Whichever record was updated most recently determines status and total debt
-        const dominant = localUpdated >= cloudUpdated ? local : existing;
-
-        mergedMap.set(normName, {
-          id: existing.id || local.id,
-          name: localUpdated >= cloudUpdated ? local.name : existing.name,
-          normalizedName: normName,
-          phone: dominant.phone || existing.phone || local.phone,
-          history: mergedHistory,
-          totalDebt: dominant.status === 'settled' ? 0 : dominant.totalDebt,
-          status: dominant.status,
-          createdAt: existing.createdAt || local.createdAt,
-          updatedAt: new Date(Math.max(localUpdated, cloudUpdated)).toISOString(),
-        });
-      }
-    }
-
-    return Array.from(mergedMap.values()).sort((a, b) => {
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
   },
 };

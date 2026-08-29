@@ -2,9 +2,9 @@
  * ==============================================================================
  * SỔ GHI NỢ QUÁN CƠM - GOOGLE APPS SCRIPT ĐỒNG BỘ 2 CHIỀU (BI-DIRECTIONAL SYNC)
  * ==============================================================================
- * Tính năng:
- * 1. doPost(e): Nhận dữ liệu từ điện thoại/máy tính đẩy lên (Push) -> Định dạng bảng tính & lưu trữ JSON.
- * 2. doGet(e): Trả về dữ liệu công nợ mới nhất cho các thiết bị khác tải về (Pull / Polling).
+ * 1. doPost(e): Web App gửi lên -> Cập nhật bảng tính "Sổ Ghi Nợ" & lưu raw JSON vào "DATA_STORE".
+ * 2. doGet(e): Web App tải về -> Đọc TRỰC TIẾP toàn bộ các dòng trên bảng tính "Sổ Ghi Nợ"
+ *    (Đảm bảo mọi khách nợ có trên Sheet đều được tải về Web App 100%).
  * ==============================================================================
  */
 
@@ -24,11 +24,11 @@ function doPost(e) {
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. LƯU RAW JSON ĐỂ doGet TRẢ VỀ NHANH NHẤT (<100ms)
+    // 1. Lưu bản backup JSON vào sheet DATA_STORE
     var dataSheet = ss.getSheetByName("DATA_STORE");
     if (!dataSheet) {
       dataSheet = ss.insertSheet("DATA_STORE");
-      dataSheet.hideSheet(); // Ẩn sheet kỹ thuật để bảng tính gọn gàng
+      dataSheet.hideSheet();
     }
     dataSheet.clear();
     var backupObject = {
@@ -38,7 +38,7 @@ function doPost(e) {
     };
     dataSheet.getRange(1, 1).setValue(JSON.stringify(backupObject));
 
-    // 2. ĐỊNH DẠNG VÀ GHI DỮ LIỆU HIỂN THỊ TRÊN SHEET "Sổ Ghi Nợ"
+    // 2. Tạo/Cập nhật sheet hiển thị "Sổ Ghi Nợ"
     var sheet = ss.getSheetByName("Sổ Ghi Nợ");
     if (!sheet) {
       sheet = ss.insertSheet("Sổ Ghi Nợ", 0);
@@ -60,10 +60,10 @@ function doPost(e) {
 
     sheet.clear();
 
-    // Tiêu đề quán cơm
-    sheet.getRange(1, 1).setValue("🏪 " + restaurantName.toUpperCase() + " - DANH SÁCH CÔNG NỢ ĐỒNG BỘ");
+    // Tiêu đề
+    sheet.getRange(1, 1).setValue("🏪 " + restaurantName.toUpperCase() + " - DANH SÁCH CÔNG NỢ");
     sheet.getRange(1, 1, 1, headers.length).merge().setFontWeight("bold").setFontSize(13).setFontColor("#15803d");
-    sheet.getRange(2, 1).setValue("🕒 Cập nhật lần cuối: " + new Date().toLocaleString("vi-VN") + " • Tự động đồng bộ 2 chiều");
+    sheet.getRange(2, 1).setValue("🕒 Cập nhật lúc: " + new Date().toLocaleString("vi-VN") + " • Tự động đồng bộ 2 chiều");
     sheet.getRange(2, 1, 1, headers.length).merge().setFontStyle("italic").setFontSize(10).setFontColor("#64748b");
 
     // Header bảng
@@ -76,7 +76,6 @@ function doPost(e) {
     headerRange.setHorizontalAlignment("center");
     headerRange.setVerticalAlignment("middle");
 
-    // Chuyển đổi dữ liệu records thành các dòng
     var rows = [];
     var totalActiveDebtSum = 0;
 
@@ -103,7 +102,7 @@ function doPost(e) {
             Number(record.totalDebt) || 0,
             statusText,
             entry.note || "",
-            record.updatedAt || ""
+            record.updatedAt || new Date().toISOString()
           ]);
         }
       } else {
@@ -118,7 +117,7 @@ function doPost(e) {
           Number(record.totalDebt) || 0,
           statusText,
           "",
-          record.updatedAt || ""
+          record.updatedAt || new Date().toISOString()
         ]);
       }
     }
@@ -126,37 +125,39 @@ function doPost(e) {
     if (rows.length > 0) {
       var dataRange = sheet.getRange(headerRow + 1, 1, rows.length, headers.length);
       dataRange.setValues(rows);
+      dataRange.setFontSize(10);
+      dataRange.setVerticalAlignment("middle");
 
-      // Định dạng tiền tệ VNĐ
-      sheet.getRange(headerRow + 1, 5, rows.length, 1).setNumberFormat("#,##0");
-      sheet.getRange(headerRow + 1, 6, rows.length, 3).setNumberFormat("#,##0 \"đ\"");
-
-      sheet.getRange(headerRow + 1, 1, rows.length, 1).setHorizontalAlignment("center");
-      sheet.getRange(headerRow + 1, 4, rows.length, 1).setHorizontalAlignment("center");
+      // Căn lề & format tiền tệ
+      sheet.getRange(headerRow + 1, 5, rows.length, 1).setHorizontalAlignment("center");
+      sheet.getRange(headerRow + 1, 6, rows.length, 3).setNumberFormat("#,##0");
       sheet.getRange(headerRow + 1, 9, rows.length, 1).setHorizontalAlignment("center");
 
+      // Đổi màu trạng thái
       for (var r = 0; r < rows.length; r++) {
         var rowNum = headerRow + 1 + r;
-        var st = rows[r][8];
-        if (st === "Đang Nợ") {
-          sheet.getRange(rowNum, 8).setFontColor("#dc2626").setFontWeight("bold");
-          sheet.getRange(rowNum, 9).setFontColor("#dc2626").setFontWeight("bold");
+        var rowStatus = rows[r][8];
+        if (rowStatus === "Đã Thanh Toán") {
+          sheet.getRange(rowNum, 9).setFontColor("#16a34a").setFontWeight("bold");
         } else {
-          sheet.getRange(rowNum, 8).setFontColor("#16a34a");
-          sheet.getRange(rowNum, 9).setFontColor("#16a34a");
+          sheet.getRange(rowNum, 9).setFontColor("#dc2626").setFontWeight("bold");
+          sheet.getRange(rowNum, 8).setFontColor("#dc2626").setFontWeight("bold");
         }
       }
+
+      // Dòng tổng cộng
+      var sumRow = headerRow + 1 + rows.length;
+      sheet.getRange(sumRow, 1, 1, 7).merge().setValue("TỔNG TIỀN NỢ CHƯA THU CỦA QUÁN:").setFontWeight("bold").setHorizontalAlignment("right");
+      sheet.getRange(sumRow, 8).setValue(totalActiveDebtSum).setFontWeight("bold").setFontColor("#dc2626").setNumberFormat("#,##0");
+      sheet.getRange(sumRow, 1, 1, headers.length).setBackground("#fef2f2").setFontSize(11);
     }
 
-    for (var c = 1; c <= headers.length; c++) {
-      sheet.autoResizeColumn(c);
-    }
+    sheet.autoResizeColumns(1, headers.length);
 
     return ContentService.createTextOutput(
       JSON.stringify({
         status: "success",
-        message: "Đồng bộ thành công " + records.length + " khách hàng.",
-        totalRows: rows.length,
+        message: "Đồng bộ lên Google Sheets thành công (" + records.length + " khách hàng).",
         totalActiveDebt: totalActiveDebtSum,
         syncedAt: syncedAt
       })
@@ -172,40 +173,9 @@ function doPost(e) {
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var dataSheet = ss.getSheetByName("DATA_STORE");
-
-    if (dataSheet) {
-      var rawJson = dataSheet.getRange(1, 1).getValue();
-      if (rawJson && typeof rawJson === "string" && rawJson.trim().startsWith("{")) {
-        try {
-          var parsed = JSON.parse(rawJson);
-          if (parsed && Array.isArray(parsed.records)) {
-            return ContentService.createTextOutput(
-              JSON.stringify({
-                status: "success",
-                restaurantName: parsed.restaurantName || "Sổ Ghi Nợ Quán Cơm",
-                records: parsed.records || [],
-                syncedAt: parsed.syncedAt || new Date().toISOString()
-              })
-            ).setMimeType(ContentService.MimeType.JSON);
-          }
-        } catch (jsonErr) {
-          // Fallback to reading the visible sheet
-        }
-      }
-    }
-
-    // Trường hợp chưa có DATA_STORE, đọc tạm từ sheet hiển thị
     var sheet = ss.getSheetByName("Sổ Ghi Nợ");
     if (!sheet) {
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          status: "success",
-          restaurantName: "Sổ Ghi Nợ Quán Cơm",
-          records: [],
-          syncedAt: new Date().toISOString()
-        })
-      ).setMimeType(ContentService.MimeType.JSON);
+      sheet = ss.getSheets()[0];
     }
 
     var lastRow = sheet.getLastRow();
@@ -220,34 +190,46 @@ function doGet(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    var values = sheet.getRange(5, 1, lastRow - 4, 11).getValues();
+    var numRows = lastRow - 4;
+    var values = sheet.getRange(5, 1, numRows, 11).getValues();
     var recordsMap = {};
+    var orderList = [];
 
     for (var i = 0; i < values.length; i++) {
       var row = values[i];
-      var id = String(row[0] || ("KH_" + i));
       var name = String(row[1] || "").trim();
-      if (!name) continue;
+      if (!name || name.indexOf("TỔNG TIỀN NỢ") >= 0) continue;
 
-      if (!recordsMap[id]) {
-        recordsMap[id] = {
+      var normKey = name.toLowerCase().trim();
+      var id = String(row[0] || ("KH_" + (i + 1)));
+
+      if (!recordsMap[normKey]) {
+        recordsMap[normKey] = {
           id: id,
           name: name,
-          normalizedName: name.toLowerCase().trim(),
+          normalizedName: normKey,
           phone: row[2] ? String(row[2]) : undefined,
           totalDebt: Number(row[7]) || 0,
-          status: row[8] === "Đã Thanh Toán" ? "settled" : "active",
+          status: String(row[8]).toLowerCase().indexOf("đã thanh toán") >= 0 ? "settled" : "active",
           createdAt: String(row[10] || new Date().toISOString()),
           updatedAt: String(row[10] || new Date().toISOString()),
           history: []
         };
+        orderList.push(normKey);
       }
 
-      if (row[3]) {
-        recordsMap[id].history.push({
+      if (row[7] !== "" && !isNaN(Number(row[7]))) {
+        recordsMap[normKey].totalDebt = Number(row[7]);
+      }
+      if (row[8]) {
+        recordsMap[normKey].status = String(row[8]).toLowerCase().indexOf("đã thanh toán") >= 0 ? "settled" : "active";
+      }
+
+      if (row[3] || row[4] || row[6]) {
+        recordsMap[normKey].history.push({
           entryId: "ENT_" + id + "_" + i,
           timestamp: String(row[10] || new Date().toISOString()),
-          displayDate: String(row[3]),
+          displayDate: String(row[3] || ""),
           quantity: Number(row[4]) || 1,
           pricePerMeal: Number(row[5]) || 0,
           amount: Number(row[6]) || 0,
@@ -257,8 +239,8 @@ function doGet(e) {
     }
 
     var resultRecords = [];
-    for (var key in recordsMap) {
-      resultRecords.push(recordsMap[key]);
+    for (var k = 0; k < orderList.length; k++) {
+      resultRecords.push(recordsMap[orderList[k]]);
     }
 
     return ContentService.createTextOutput(

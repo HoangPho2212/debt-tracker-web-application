@@ -131,7 +131,7 @@ describe('GoogleSheetsSyncEngine', () => {
   });
 
   describe('mergeCloudAndLocalRecords', () => {
-    it('should merge cloud and local records seamlessly', () => {
+    it('should reflect cloud records accurately including deletions', () => {
       const local: DebtorRecord[] = [
         {
           id: 'KH_1',
@@ -178,9 +178,27 @@ describe('GoogleSheetsSyncEngine', () => {
 
       const merged = GoogleSheetsSyncEngine.mergeCloudAndLocalRecords(local, cloud);
 
-      expect(merged.length).toBe(2);
-      expect(merged.some((r) => r.name === 'Anh Tuấn Viettel')).toBe(true);
-      expect(merged.some((r) => r.name === 'Chị Lan Ngân Hàng')).toBe(true);
+      expect(merged.length).toBe(1);
+      expect(merged[0].name).toBe('Chị Lan Ngân Hàng');
+      expect(merged.some((r) => r.name === 'Anh Tuấn Viettel')).toBe(false); // Deleted on cloud
+    });
+
+    it('should return empty list when cloud records is empty array', () => {
+      const local: DebtorRecord[] = [
+        {
+          id: 'KH_1',
+          name: 'Anh Tuấn Viettel',
+          normalizedName: 'anh tuan viettel',
+          totalDebt: 35000,
+          status: 'active',
+          createdAt: '2026-08-28T10:00:00.000Z',
+          updatedAt: '2026-08-28T10:00:00.000Z',
+          history: [],
+        },
+      ];
+
+      const merged = GoogleSheetsSyncEngine.mergeCloudAndLocalRecords(local, []);
+      expect(merged).toHaveLength(0);
     });
   });
 });
