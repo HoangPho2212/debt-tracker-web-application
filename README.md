@@ -1,78 +1,114 @@
-# Sổ Ghi Nợ Quán Cơm (Local-First Mobile Web App)
+# Vietnamese Eatery Debt Tracker (Local-First Mobile Web App)
 
-Ứng dụng web hiện đại, tối ưu 100% cho màn hình điện thoại (Mobile-First) và lưu trữ cục bộ trên thiết bị (Local-First), giúp chủ quán cơm bình dân quản lý ghi nợ, tra cứu và thu tiền nhanh chóng mà không cần server hay cơ sở dữ liệu cloud.
-
----
-
-## 🌟 Tính Năng Nổi Bật
-
-1. **Ghi nợ siêu tốc (1 chạm & 1 tay):**
-   - Tự động gợi ý tên khách cũ khi vừa gõ phím.
-   - Nút tăng giảm số lượng suất ăn `[ - ]` `[ + ]` và phím tắt chọn nhanh `1`, `2`, `3`, `5` suất.
-   - Điền sẵn đơn giá mặc định (tùy chỉnh được trong Cài đặt).
-   - Tự động cộng dồn nợ nếu khách đã từng có hồ sơ nợ trước đó.
-
-2. **Tìm kiếm tức thì không dấu (Vietnamese Diacritics Engine):**
-   - Gõ "tuan", "lan", "viettel"... tìm ra ngay cả khi có dấu hoặc viết hoa/viết thường.
-   - Lọc nhanh theo các tab: **Tất cả**, **Đang nợ**, **Đã trả**.
-
-3. **Thanh toán & Đóng nợ:**
-   - Nút **[ ✓ Đã Thanh Toán ]** trực tiếp trên thẻ khách hàng kèm pop-up xác nhận tránh bấm nhầm.
-   - Xem toàn bộ lịch sử các bữa ăn nợ (ngày giờ, số suất, đơn giá, món ăn).
-   - Xóa từng bữa lẻ nếu ghi nhầm hoặc khách trả trước 1 bữa.
-   - Tính năng **Sao chép hóa đơn gửi Zalo/SMS** để đối chiếu với khách hàng.
-
-4. **100% Offline & Bảo Mật Tuyệt Đối (Local-First):**
-   - Lưu trữ toàn bộ trên trình duyệt máy khách (`localStorage`), mất mạng hoặc vào vùng không có sóng 4G/Wifi vẫn hoạt động bình thường.
-   - Không lo bị lộ thông tin khách hàng hay phát sinh phí duy trì máy chủ hàng tháng (0đ chi phí vận hành).
-
-5. **Sao Lưu & Phục Hồi Dữ Liệu (Backup & Restore):**
-   - Xuất file `.json` sao lưu chỉ với 1 cú chạm để lưu về máy, Google Drive hoặc gửi qua Zalo.
-   - Phục hồi lại toàn bộ sổ nợ khi đổi điện thoại mới hoặc xóa trình duyệt.
-
-6. **PWA (Progressive Web App):**
-   - Cài đặt ra Màn hình chính (Add to Home Screen) trên iPhone (Safari) và Android (Chrome).
+A high-performance, mobile-first, local-first web application designed for Vietnamese eateries and local diners (*quán cơm bình dân*). It allows shop owners and cashiers to quickly log meal debts, aggregate records, settle balances with a single tap, and automatically synchronize data in real-time with Google Sheets across multiple devices—with zero server costs and full offline reliability.
 
 ---
 
-## 🛠️ Hướng Dẫn Cài Đặt & Chạy Môi Trường Phát Triển
+## 🌟 Key Features
 
-### Yêu Cầu:
+1. **Ultra-Fast Debt Recording (One-Thumb Friendly):**
+   - Instant customer autocomplete with previous name history.
+   - Quantity counter buttons `[ - ]` / `[ + ]` and quick preset chips (`1`, `2`, `3`, `5` meals).
+   - Pre-filled default meal price (customizable in Settings, e.g., 35,000 VND).
+   - Dish and condiment quick chips (`+ Cơm sườn`, `+ Cơm gà`, `+ Thêm trứng`, `+ Mang về`).
+   - Automatic balance accumulation for existing debtor profiles.
+
+2. **Real-Time Vietnamese Diacritics Search Engine:**
+   - Case-insensitive, accent-insensitive search (typing `tuan`, `lan`, `viettel` matches `Tuấn`, `Lan`, `Viettel`).
+   - Instant filter tabs: **All**, **Active Debt**, **Settled**.
+
+3. **Settlement & Debt History Management:**
+   - One-tap **[ ✓ Settle Debt ]** button on customer cards with confirmation popups.
+   - Detailed timeline history of each meal (date & time, quantity, unit price, total amount, notes).
+   - Granular deletion of individual meal entries if mistakenly logged.
+   - **Copy Receipt for Zalo/SMS** button for easy cross-checking with customers.
+
+4. **Bi-Directional Real-Time Google Sheets Auto-Sync (2-Way Cloud Backup):**
+   - **Fetch on Load:** Automatically pulls the latest ledger from Google Sheets when opening the app.
+   - **Auto-Push:** Debounced background sync whenever debts are recorded or settled.
+   - **1-Minute Auto-Polling:** Silently refreshes and reconciles data every 60 seconds across multiple devices (e.g., cashier tablet and owner phone).
+   - **"View in Google Sheets" Button:** Prominent green toolbar button to open the live spreadsheet directly.
+   - **Live Status Badges:** `🟢 Synced`, `🟡 Syncing...`, `⚪ Offline (Local Storage)`, `🔴 Sync Error`.
+
+5. **100% Offline Resilience & Privacy (Local-First):**
+   - All state is preserved locally in `localStorage` (<5ms latency), operating seamlessly even without 4G/Wi-Fi coverage.
+   - Zero monthly hosting/database fees ($0 operating cost).
+
+6. **JSON Backup & Disaster Recovery:**
+   - One-click `.json` backup file export to save locally, on Google Drive, or send via Zalo.
+   - Instant restore capability when switching phones or resetting browser data.
+
+7. **PWA (Progressive Web App):**
+   - Installable to Home Screen on iOS (Safari) and Android (Chrome) with standalone app feel.
+
+---
+
+## 🛠️ Tech Stack & Architecture
+
+- **Frontend:** React 19, TypeScript, Tailwind CSS, Vite, Lucide Icons.
+- **Testing:** Vitest, React Testing Library (100% test pass rate with TDD).
+- **Backend / Sync:** Google Apps Script (Web App Endpoint) + Google Sheets.
+- **Standalone Mode:** Single-file standalone HTML component in `standalone/index.html`.
+- **Deployment:** Vercel Static Hosting (Edge CDN).
+
+---
+
+## 🚀 Quick Start & Development
+
+### Prerequisites:
 - Node.js >= 18
-- Trình quản lý gói npm
+- npm
 
-### 1. Khởi chạy Local:
+### 1. Install & Run Locally:
 ```bash
-# Cài đặt dependencies
+# Install dependencies
 npm install
 
-# Khởi chạy máy chủ phát triển
+# Start Vite dev server
 npm run dev
 ```
 
-### 2. Chạy Kiểm Thử (Unit Tests - Vitest TDD):
+### 2. Run Test Suite (Vitest TDD):
 ```bash
 npm run test
 ```
 
-### 3. Đóng gói Production (Build tĩnh):
+### 3. Production Build:
 ```bash
 npm run build
 ```
-Thư mục `dist/` chứa toàn bộ mã nguồn tĩnh sẵn sàng deploy lên Vercel, Netlify hoặc GitHub Pages.
+The optimized static bundle will be built into the `dist/` directory, ready for instant deployment.
 
 ---
 
-## 🚀 Hướng Dẫn Triển Khai Miễn Phí Lên Vercel
+## 📊 Setting Up Google Sheets Auto-Sync (2 Minutes)
 
-1. Đẩy dự án lên GitHub.
-2. Đăng nhập [vercel.com](https://vercel.com) -> Chọn **Add New Project**.
-3. Chọn kho lưu trữ GitHub vừa tạo -> Framework Preset: **Vite** -> Nhấn **Deploy**.
-4. Vercel sẽ cấp đường link trực tiếp (ví dụ: `quan-com-no.vercel.app`) để chủ quán mở trên điện thoại.
+1. Create a new Google Spreadsheet at [sheets.google.com](https://sheets.google.com) (e.g., named `Sổ Ghi Nợ Quán Cơm`).
+2. Go to **Extensions** ➔ **Apps Script**.
+3. Paste the contents of [`google-apps-script/Code.gs`](./google-apps-script/Code.gs) into the script editor.
+4. Click **Deploy** ➔ **New deployment** ➔ Select **Web App**:
+   - **Execute as:** `Me`
+   - **Who has access:** `Anyone`
+5. Copy the generated Web App URL ending with `/exec`.
+6. In the web app, click **Settings ⚙️** and paste the **Google Sheet Link** and **Web App URL**.
 
 ---
 
-## 📱 Hướng Dẫn Cài Ra Màn Hình Chính Trên Điện Thoại
+## 🌐 Deploy to Vercel (Free)
 
-- **iPhone (Safari):** Mở link -> Nhấn biểu tượng **Chia sẻ (Share)** ở cạnh dưới -> Chọn **Thêm vào MH chính (Add to Home Screen)**.
-- **Android (Chrome):** Mở link -> Nhấn dấu **3 chấm** góc trên -> Chọn **Cài đặt ứng dụng / Thêm vào màn hình chính**.
+1. Push your repository to GitHub.
+2. Log in to [vercel.com](https://vercel.com) ➔ Click **Add New Project**.
+3. Select the repository ➔ Framework Preset: **Vite** ➔ Click **Deploy**.
+4. Vercel provides a custom HTTPS link (e.g., `quan-com-debt-tracker.vercel.app`).
+
+---
+
+## 📱 Mobile Add-to-Home-Screen Instructions
+
+- **iOS (Safari):** Open the website link ➔ Tap **Share** icon at the bottom ➔ Select **Add to Home Screen**.
+- **Android (Chrome):** Open the website link ➔ Tap the **three dots** menu icon ➔ Select **Install App / Add to Home screen**.
+
+---
+
+## 📄 License
+MIT License. Built for Vietnamese local food vendors and small dining establishments.

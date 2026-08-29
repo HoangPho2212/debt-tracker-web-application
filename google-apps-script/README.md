@@ -1,43 +1,47 @@
-# Hướng Dẫn Thiết Lập Tự Động Đồng Bộ Google Sheets (Auto-Sync)
+# Google Sheets Auto-Sync Setup Guide
 
-Chỉ cần **2 phút** thiết lập miễn phí theo các bước dưới đây để kết nối Sổ Ghi Nợ Quán Cơm với Google Sheets của bạn.
-
----
-
-## 📌 Bước 1: Tạo Google Sheets mới
-1. Truy cập [sheets.google.com](https://sheets.google.com) và tạo một bảng tính mới (đặt tên ví dụ: `Sổ Ghi Nợ Quán Cơm`).
-2. Copy đường link trang tính từ thanh địa chỉ trình duyệt (Link có dạng: `https://docs.google.com/spreadsheets/d/1abc.../edit`).
+Set up real-time, bi-directional synchronization between the Debt Tracker Web App and your private Google Sheets in **less than 2 minutes** for free.
 
 ---
 
-## 📌 Bước 2: Dán mã Google Apps Script
-1. Trên trang tính vừa tạo, chọn menu **Tiện ích mở rộng (Extensions)** ➔ Chọn **Apps Script**.
-2. Xóa toàn bộ code mặc định trong file `Code.gs` và copy toàn bộ nội dung từ file [`google-apps-script/Code.gs`](./Code.gs) dán vào.
-3. Nhấn tổ hợp phím **Ctrl + S** (hoặc biểu tượng Đĩa mềm) để Lưu.
+## 📌 Step 1: Create a New Google Spreadsheet
+1. Go to [sheets.google.com](https://sheets.google.com) and create a new blank spreadsheet (e.g., name it `Sổ Ghi Nợ Quán Cơm`).
+2. Copy the spreadsheet URL from your browser address bar (e.g., `https://docs.google.com/spreadsheets/d/1abc.../edit`).
 
 ---
 
-## 📌 Bước 3: Triển khai Web App (Lấy URL API)
-1. Nhấn nút xanh **Triển khai (Deploy)** ở góc trên bên phải ➔ Chọn **Triển khai mới (New deployment)**.
-2. Chọn loại triển khai: Bấm biểu tượng Bánh răng ⚙️ ➔ Chọn **Ứng dụng web (Web App)**.
-3. Điền thông số cấu hình:
-   - **Mô tả:** `Auto Sync Sổ Nợ`
-   - **Thực thi dưới dạng (Execute as):** `Tôi (Me / địa chỉ Gmail của bạn)`
-   - **Ai có quyền truy cập (Who has access):** **`Bất kỳ ai (Anyone)`** *(Lưu ý: Bắt buộc chọn "Anyone" để web app gửi dữ liệu lên được).*
-4. Nhấn nút **Triển khai (Deploy)**.
-5. Nếu Google hiển thị thông báo yêu cầu cấp quyền:
-   - Nhấn **Xem lại quyền truy cập (Review permissions)** ➔ Chọn tài khoản Google của bạn.
-   - Nhấn **Nâng cao (Advanced)** ➔ Chọn **Đi tới ... (không an toàn)** ➔ Nhấn **Cho phép (Allow)**.
-6. Copy **URL của ứng dụng web** (URL có đuôi kết thúc bằng `/exec`, ví dụ: `https://script.google.com/macros/s/AKfycb.../exec`).
+## 📌 Step 2: Paste Google Apps Script Code
+1. In your newly created spreadsheet, click on **Extensions** in the top menu ➔ select **Apps Script**.
+2. Delete any boilerplate code inside `Code.gs` and copy-paste the entire contents of [`google-apps-script/Code.gs`](./Code.gs).
+3. Press **Ctrl + S** (or click the disk icon) to Save the project.
 
 ---
 
-## 📌 Bước 4: Dán URL vào Web App
-1. Mở ứng dụng Sổ Ghi Nợ Quán Cơm trên điện thoại hoặc máy tính.
-2. Bấm vào nút **Cài đặt ⚙️** trên Header.
-3. Dán **Link Google Sheets** vào ô *"Link Google Sheets"* và dán **URL Web App (/exec)** vào ô *"Google Apps Script Web App URL"*.
-4. Bấm **Lưu Cài Đặt**.
+## 📌 Step 3: Deploy as a Web App (Get API Endpoint URL)
+1. Click the blue **Deploy** button at the top right ➔ Select **New deployment**.
+2. Click the gear icon ⚙️ next to *Select type* ➔ Choose **Web app**.
+3. Configure the deployment settings:
+   - **Description:** `Debt Tracker Bi-Directional Auto Sync`
+   - **Execute as:** `Me (your Gmail address)`
+   - **Who has access:** **`Anyone`** *(Required so the client web app can send/receive sync requests without Google OAuth popups).*
+4. Click **Deploy**.
+5. When Google prompts for authorization:
+   - Click **Review permissions** ➔ Select your Google account.
+   - Click **Advanced** ➔ Click **Go to Untitled project (unsafe)** ➔ Click **Allow**.
+6. Copy the **Web App URL** ending with **`/exec`** (e.g., `https://script.google.com/macros/s/AKfycb.../exec`).
 
-Từ bây giờ:
-- Nút **"Xem trong Trang tính"** với icon Google Sheets màu xanh lá sẽ hiển thị ngay trên thanh công cụ.
-- Mỗi lần bạn thêm nợ mới, thanh toán nợ hoặc chỉnh sửa, dữ liệu sẽ **tự động đồng bộ ngầm** lên bảng tính Google Sheets của bạn trong vòng vài giây!
+---
+
+## 📌 Step 4: Configure the Web App
+1. Open the Debt Tracker app on your phone or computer.
+2. Click on the **Settings ⚙️** icon in the header toolbar.
+3. Paste your **Google Sheet URL** into the *"Google Sheets Link"* field, and paste your **Web App URL (/exec)** into the *"Google Apps Script Web App URL"* field.
+4. Click **Save Settings**.
+
+---
+
+## 🔄 How the 2-Way Sync Engine Operates:
+- **On App Load (Fetch on Load):** The app calls `doGet` from Google Apps Script to pull the latest debt records into local storage.
+- **On Change (Auto-Push):** Every newly added debt or settled payment automatically updates both the formatted spreadsheet and backup store in the background.
+- **1-Minute Polling:** The app automatically checks for cloud updates every 60 seconds so multiple cashiers/devices stay 100% in sync.
+- **View in Google Sheets:** Click the green **Trang Tính** button on the header toolbar to open and inspect your live ledger at any time.

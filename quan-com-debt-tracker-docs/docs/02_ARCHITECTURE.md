@@ -1,28 +1,53 @@
 # 02. System Architecture & Technical Specifications
 
-## 1. Kiến Trúc Tổng Quan (Architecture Overview)
+## 1. High-Level Architecture Diagram
 
+```mermaid
+graph TD
+    User["📱 Mobile User (Cashier / Owner)"] --> UI["⚛️ React 19 View Layer (Tailwind CSS)"]
+    UI --> Domain["🧠 Domain Logic & JayContracts (DebtManager)"]
+    Domain --> LocalStorage["💾 LocalStorage Engine (Zero-Latency Offline Store)"]
+    
+    subgraph Cloud Sync [2-Way Google Sheets Cloud Integration]
+        SyncEngine["⚡ GoogleSheetsSyncEngine (Debounced & Polling)"]
+        GAS["☁️ Google Apps Script Web App (/exec)"]
+        Sheets["📊 Google Sheets Spreadsheet ('Sổ Ghi Nợ')"]
+        DataStore["🗄️ Raw JSON Store ('DATA_STORE')"]
+    end
+    
+    Domain -. Auto-Push (doPost) .-> SyncEngine
+    SyncEngine --> GAS
+    GAS --> Sheets
+    GAS --> DataStore
+    
+    GAS -. Fetch on Load & 1-Min Polling (doGet) .-> SyncEngine
+    SyncEngine -. Merge Strategy .-> Domain
 ```
-[ Mobile Browser / PWA ]
-          │
-          ├─► UI View (HTML5 / Tailwind CSS / Vanilla JS or Vue)
-          │         │
-          │         ▼
-          ├─► State Management / Business Logic (Calculation, Validation)
-          │         │
-          │         ▼
-          └─► Persistence Layer (LocalStorage Engine)
-                    │
-                    └─► Local JSON Store (`debt_records_v1`)
-```
 
-## 2. Nguyên Tắc Thiết Kế Kỹ Thuật (Design Principles)
-1. **Zero-Backend / 100% Client-Side:** Không sử dụng API Server, không phát sinh chi phí hạ tầng.
-2. **Offline-First:** Ứng dụng chạy hoàn toàn trên bộ nhớ đệm của trình duyệt di động, mất sóng 4G/Wifi vẫn hoạt động trơn tru.
-3. **Optimistic UI:** Thao tác nhập, xóa, cập nhật diễn ra tức thì (<10ms) vì không có độ trễ mạng.
-4. **Data Isolation:** Dữ liệu gắn liền với LocalStorage của trình duyệt trên máy của người dùng.
+---
 
-## 3. Quản Lý Bộ Nhớ Trình Duyệt (LocalStorage Strategy)
-- **Khóa lưu trữ (Storage Key):** `QUAN_COM_DEBT_RECORDS_V1`
-- **Cơ chế đồng bộ:** Mỗi khi có thay đổi (Add, Settle, Delete, Import), state trong RAM được serialize thành chuỗi JSON và ghi đè vào LocalStorage qua hàm `saveToStorage()`.
-- **Dung lượng:** `localStorage` hỗ trợ ~5MB (tương đương hơn 10.000 lượt ghi nợ, quá đủ cho nhu cầu quán cơm trong nhiều năm).
+## 2. Core Architectural Principles
+
+1. **Local-First & Optimistic UI:**
+   - Every user mutation (add debt, settle balance, delete entry) writes to in-memory state and `localStorage` instantly (<10ms).
+   - The UI updates immediately without waiting for network I/O.
+
+2. **Non-Blocking Background Cloud Synchronization:**
+   - Client-side network requests to Google Apps Script use `mode: 'no-cors'` with a debounced delay of `1200ms`.
+   - Network timeouts or connection losses never freeze or degrade the user experience.
+
+3. **Bi-Directional Multi-Device Reconciliation:**
+   - **On Load:** The client executes `fetchRecordsFromGoogleSheets()` to retrieve the latest state.
+   - **Auto-Polling:** Every 60 seconds (when the tab is visible and network is active), the client pulls new changes and applies an intelligent timestamp-based merge strategy (`mergeCloudAndLocalRecords`).
+
+4. **Zero-Cost & Serverless:**
+   - The frontend is hosted entirely as static assets on Edge CDNs (Vercel / GitHub Pages).
+   - Google Apps Script provides a 100% free serverless API layer connected directly to Google Sheets.
+
+---
+
+## 3. Storage & Memory Management
+
+- **Storage Key:** `QUAN_COM_DEBT_RECORDS_V1` (Records), `QUAN_COM_SETTINGS_V1` (Settings).
+- **Capacity:** Browser `localStorage` offers ~5MB to 10MB of storage. A typical debtor record with 10 history entries consumes ~500 bytes, allowing storage for over **10,000 to 20,000 debtor profiles** (decades of operations for a local dining eatery).
+- **Format:** Strongly-typed UTF-8 JSON strings with sanitized inputs and JayContract validation.

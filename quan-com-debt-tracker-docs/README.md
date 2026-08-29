@@ -1,15 +1,15 @@
-# Sổ Ghi Nợ Quán Cơm (Local-First Mobile Web App)
+# Vietnamese Eatery Debt Tracker - Architecture & Documentation
 
-Dự án ứng dụng web nhẹ, tối ưu hóa 100% cho màn hình di động nhằm quản lý việc ghi nợ và thanh toán suất cơm tại quán ăn.
+A lightweight, mobile-first, local-first web application designed for Vietnamese eateries and diners (*quán cơm bình dân*) to manage customer meal debts and settle balances in real-time.
 
-## 🎯 Mục Tiêu Dự Án
-- **Mục đích:** Hỗ trợ chủ quán ghi nhận công nợ nhanh theo thời gian thực (tên khách, ngày giờ, số suất, đơn giá, cộng dồn nợ tự động).
-- **Mô hình kiến trúc:** **Frontend-Only / Local-First**. Toàn bộ dữ liệu được lưu trữ và tính toán trực tiếp trên trình duyệt (`localStorage` / `IndexedDB`) của thiết bị di động.
-- **Hạ tầng triển khai:** Tĩnh hoàn toàn (Vercel / GitHub Pages), 0đ chi phí vận hành, không cần server backend hay cơ sở dữ liệu cloud.
+## 🎯 Project Objectives
+- **Core Mission:** Empower small restaurant owners and cashiers to record meal debts in seconds (customer name, timestamp, meal quantity, unit price, notes, and auto-accumulated debt balance).
+- **Architecture Paradigm:** **Local-First / Frontend-First + Bi-Directional Google Sheets Sync**. All computations and data persistence run directly in the client browser (`localStorage`), with real-time cloud backup to Google Sheets via Google Apps Script.
+- **Zero-Cost Infrastructure:** 100% static hosting on Vercel or GitHub Pages, requiring $0/month server costs or cloud database management.
 
-## 📂 Cấu Trúc Thư Mục Docs
-- `docs/01_PRD.md`: Yêu cầu sản phẩm, phân tích nghiệp vụ quán cơm.
-- `docs/02_ARCHITECTURE.md`: Kiến trúc hệ thống Frontend-only, luồng dữ liệu và cơ chế lưu trữ LocalStorage.
-- `docs/03_DATA_MODEL.md`: Thiết kế cấu trúc dữ liệu JSON, State Management và chuẩn hóa trường.
-- `docs/04_UI_UX_MOBILE_SPEC.md`: Đặc tả giao diện Mobile-First, luồng thao tác 1 chạm và PWA Add-to-Homescreen.
-- `docs/05_DEPLOYMENT_MAINTENANCE.md`: Hướng dẫn triển khai Vercel, sao lưu/phục hồi (Backup/Restore).
+## 📂 Documentation Sitemap
+- [`docs/01_PRD.md`](./docs/01_PRD.md): Product Requirements Document, user stories, and business workflows.
+- [`docs/02_ARCHITECTURE.md`](./docs/02_ARCHITECTURE.md): System architecture, bi-directional sync flow, and LocalStorage strategy.
+- [`docs/03_DATA_MODEL.md`](./docs/03_DATA_MODEL.md): JSON data contracts, TypeScript interfaces, and sample state schemas.
+- [`docs/04_UI_UX_MOBILE_SPEC.md`](./docs/04_UI_UX_MOBILE_SPEC.md): Mobile-first UI/UX specifications, touch targets, and PWA capabilities.
+- [`docs/05_DEPLOYMENT_MAINTENANCE.md`](./docs/05_DEPLOYMENT_MAINTENANCE.md): Deployment instructions for Vercel, maintenance procedures, and disaster recovery.

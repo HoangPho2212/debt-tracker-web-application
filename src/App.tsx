@@ -41,10 +41,16 @@ export const App: React.FC = () => {
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Ref to prevent initial mount sync loops
+  // Refs for state tracking & preventing loops
   const isInitialMount = useRef(true);
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isRemoteUpdateRef = useRef(false);
   const isPullingRef = useRef(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   // Auto persist records to LocalStorage
   useEffect(() => {
@@ -72,7 +78,7 @@ export const App: React.FC = () => {
 
   // 1. PUSH: Gửi dữ liệu local lên Google Sheets
   const triggerGoogleSheetsPush = useCallback(
-    async (targetRecords: DebtorRecord[] = records, targetSettings: AppSettings = settings) => {
+    async (targetRecords: DebtorRecord[] = recordsRef.current, targetSettings: AppSettings = settingsRef.current) => {
       if (!targetSettings.appsScriptUrl || !GoogleSheetsSyncEngine.isValidAppsScriptUrl(targetSettings.appsScriptUrl)) {
         setSyncStatus('unconfigured');
         return;
@@ -89,18 +95,20 @@ export const App: React.FC = () => {
       if (result.success) {
         setSyncStatus('synced');
         setLastSyncedAt(result.syncedAt);
-        setSettings((prev) => ({ ...prev, lastSyncedAt: result.syncedAt }));
+        // Persist timestamp silently without re-triggering dependency changes
+        StorageEngine.saveSettings({ ...targetSettings, lastSyncedAt: result.syncedAt });
       } else {
         setSyncStatus('error');
       }
     },
-    [records, settings]
+    []
   );
 
   // 2. PULL: Tải dữ liệu mới nhất từ Google Sheets về máy
   const triggerGoogleSheetsPull = useCallback(
     async (silent: boolean = false) => {
-      if (!settings.appsScriptUrl || !GoogleSheetsSyncEngine.isValidAppsScriptUrl(settings.appsScriptUrl)) {
+      const currentSettings = settingsRef.current;
+      if (!currentSettings.appsScriptUrl || !GoogleSheetsSyncEngine.isValidAppsScriptUrl(currentSettings.appsScriptUrl)) {
         if (!silent) setSyncStatus('unconfigured');
         return;
       }
@@ -115,22 +123,23 @@ export const App: React.FC = () => {
 
       if (!silent) setSyncStatus('syncing');
 
-      const result = await GoogleSheetsSyncEngine.fetchRecordsFromGoogleSheets(settings);
+      const result = await GoogleSheetsSyncEngine.fetchRecordsFromGoogleSheets(currentSettings);
       isPullingRef.current = false;
 
       if (result.success && result.records) {
+        isRemoteUpdateRef.current = true; // Mark as remote update to prevent echo push
         setRecords((prevLocal) => {
           const merged = GoogleSheetsSyncEngine.mergeCloudAndLocalRecords(prevLocal, result.records!);
           return merged;
         });
 
-        if (result.restaurantName && result.restaurantName !== settings.restaurantName) {
+        if (result.restaurantName && result.restaurantName !== currentSettings.restaurantName) {
           setSettings((prev) => ({ ...prev, restaurantName: result.restaurantName! }));
         }
 
         setSyncStatus('synced');
         setLastSyncedAt(result.syncedAt);
-        setSettings((prev) => ({ ...prev, lastSyncedAt: result.syncedAt }));
+        StorageEngine.saveSettings({ ...currentSettings, lastSyncedAt: result.syncedAt });
 
         if (!silent) {
           showToast(`Đã đồng bộ dữ liệu mới nhất từ Google Sheets (${result.records.length} khách hàng).`, 'success');
@@ -138,19 +147,22 @@ export const App: React.FC = () => {
       } else if (!silent) {
         setSyncStatus('error');
         showToast(result.message, 'error');
+      } else {
+        // Even if silent pull had no changes, reset status back to synced if already had url
+        setSyncStatus('synced');
       }
     },
-    [settings, showToast]
+    [showToast]
   );
 
-  // FETCH ON LOAD: Khi vừa mở app, tự động kéo dữ liệu từ Google Sheets về máy
+  // FETCH ON LOAD: Tải dữ liệu từ Google Sheets về máy khi vừa mở app
   useEffect(() => {
-    if (settings.appsScriptUrl) {
+    if (settingsRef.current.appsScriptUrl) {
       triggerGoogleSheetsPull(true);
     }
-  }, []); // Run once on load
+  }, [triggerGoogleSheetsPull]);
 
-  // AUTO-POLLING: Cứ sau mỗi 60 giây (1 phút), tự động tải ngầm dữ liệu để khớp giữa các máy
+  // AUTO-POLLING: Cứ sau mỗi 60 giây (1 phút), tự động tải ngầm
   useEffect(() => {
     if (!settings.appsScriptUrl) return;
 
@@ -158,7 +170,7 @@ export const App: React.FC = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
         triggerGoogleSheetsPull(true);
       }
-    }, 60000); // 60s auto refresh
+    }, 60000);
 
     return () => clearInterval(pollingInterval);
   }, [settings.appsScriptUrl, triggerGoogleSheetsPull]);
@@ -167,6 +179,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      return;
+    }
+
+    // If records changed because of pulling from cloud, do NOT push back!
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
       return;
     }
 
@@ -194,8 +212,8 @@ export const App: React.FC = () => {
   // ONLINE / OFFLINE LISTENERS
   useEffect(() => {
     const handleOnline = () => {
-      if (settings.appsScriptUrl) {
-        showToast('Đã có mạng trở lại. Đang tự động đồng bộ 2 chiều với Google Sheets...', 'info');
+      if (settingsRef.current.appsScriptUrl) {
+        showToast('Đã có mạng trở lại. Đang tự động đồng bộ Google Sheets...', 'info');
         triggerGoogleSheetsPull(true);
       }
     };
@@ -212,7 +230,7 @@ export const App: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [settings.appsScriptUrl, triggerGoogleSheetsPull, showToast]);
+  }, [triggerGoogleSheetsPull, showToast]);
 
   // Projection ViewState
   const viewState = useMemo(() => {
