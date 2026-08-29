@@ -207,6 +207,27 @@
           </div>
         </div>
 
+        <!-- Phí Ship (Giao hàng) -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <span>🛵 Phí ship (giao hàng)</span>
+            </label>
+            <span id="ship-badge" class="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">0 đ</span>
+          </div>
+          <div class="grid grid-cols-5 gap-1">
+            <button type="button" id="ship-btn-0" onclick="setShip(0)" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-emerald-600 text-white border-emerald-600 shadow-xs">0 đ</button>
+            <button type="button" id="ship-btn-5" onclick="setShip(5000)" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">+5k</button>
+            <button type="button" id="ship-btn-10" onclick="setShip(10000)" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">+10k</button>
+            <button type="button" id="ship-btn-15" onclick="setShip(15000)" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">+15k</button>
+            <button type="button" id="ship-btn-custom" onclick="setShip('custom')" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">Khác...</button>
+          </div>
+          <div id="custom-ship-container" class="hidden mt-2 flex items-center gap-2">
+            <input id="input-custom-ship" type="number" step="1000" min="0" value="0" oninput="handleCustomShipInput(this.value)" placeholder="Nhập phí ship..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900" />
+            <span class="text-xs font-bold text-slate-600 whitespace-nowrap">VNĐ</span>
+          </div>
+        </div>
+
         <!-- Customizable Time Selection (Cho phép chỉnh thời gian nợ) -->
         <div>
           <div class="flex items-center justify-between mb-1">
@@ -242,7 +263,7 @@
 
         <div class="pt-2">
           <div class="flex items-center justify-between text-xs text-slate-600 mb-2 px-1">
-            <span>Thành tiền (<span id="preview-qty">1</span> suất × <span id="preview-price">35.000 đ</span>):</span>
+            <span>Thành tiền (<span id="preview-qty">1</span> suất × <span id="preview-price">35.000 đ</span><span id="preview-ship-text"></span>):</span>
             <span id="preview-total" class="text-base font-black text-rose-600">35.000 đ</span>
           </div>
           <button type="submit" class="w-full min-h-[48px] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer">
@@ -569,6 +590,52 @@
     }
 
     let currentTimeMode = 'now';
+    let currentShipFee = 0;
+    let isCustomShipMode = false;
+
+    function setShip(amount) {
+      const btn0 = document.getElementById('ship-btn-0');
+      const btn5 = document.getElementById('ship-btn-5');
+      const btn10 = document.getElementById('ship-btn-10');
+      const btn15 = document.getElementById('ship-btn-15');
+      const btnCustom = document.getElementById('ship-btn-custom');
+      const containerCustom = document.getElementById('custom-ship-container');
+      const badge = document.getElementById('ship-badge');
+
+      const activeClass = 'py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-emerald-600 text-white border-emerald-600 shadow-xs';
+      const inactiveClass = 'py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200';
+
+      btn0.className = inactiveClass;
+      btn5.className = inactiveClass;
+      btn10.className = inactiveClass;
+      btn15.className = inactiveClass;
+      btnCustom.className = inactiveClass;
+
+      if (amount === 'custom') {
+        isCustomShipMode = true;
+        btnCustom.className = activeClass;
+        containerCustom.classList.remove('hidden');
+        const customInp = document.getElementById('input-custom-ship');
+        currentShipFee = parseInt(customInp.value) || 0;
+        badge.innerText = currentShipFee > 0 ? `+${formatVND(currentShipFee)}` : 'Tùy chọn';
+      } else {
+        isCustomShipMode = false;
+        containerCustom.classList.add('hidden');
+        currentShipFee = amount;
+        if (amount === 0) btn0.className = activeClass;
+        else if (amount === 5000) btn5.className = activeClass;
+        else if (amount === 10000) btn10.className = activeClass;
+        else if (amount === 15000) btn15.className = activeClass;
+        badge.innerText = amount === 0 ? '0 đ' : `+${formatVND(amount)}`;
+      }
+      updateTotalPreview();
+    }
+
+    function handleCustomShipInput(val) {
+      currentShipFee = Math.max(0, parseInt(val) || 0);
+      document.getElementById('ship-badge').innerText = currentShipFee > 0 ? `+${formatVND(currentShipFee)}` : '0 đ';
+      updateTotalPreview();
+    }
 
     function setTimeMode(mode) {
       currentTimeMode = mode;
@@ -609,6 +676,7 @@
       const name = nameInput.value.trim();
       const qty = parseInt(qtyInput.value) || 1;
       const price = parseInt(priceInput.value) || settings.defaultMealPrice;
+      const shipFee = currentShipFee || 0;
       const note = noteInput.value.trim();
 
       if (!name) {
@@ -632,7 +700,7 @@
 
       const isoStr = entryDate.toISOString();
       const displayDate = formatVNTime(entryDate);
-      const amount = qty * price;
+      const amount = (qty * price) + shipFee;
 
       const newEntry = {
         entryId: 'ENT_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -640,6 +708,7 @@
         displayDate: displayDate,
         quantity: qty,
         pricePerMeal: price,
+        shippingFee: shipFee > 0 ? shipFee : undefined,
         amount: amount,
         note: note || undefined
       };
@@ -677,6 +746,7 @@
       nameInput.value = '';
       qtyInput.value = '1';
       noteInput.value = '';
+      setShip(0);
       setTimeMode('now');
       updateTotalPreview();
       nameInput.focus();
@@ -720,9 +790,14 @@
     function updateTotalPreview() {
       const q = parseInt(document.getElementById('input-qty').value) || 1;
       const p = parseInt(document.getElementById('input-price').value) || 0;
+      const ship = currentShipFee || 0;
       document.getElementById('preview-qty').innerText = q;
       document.getElementById('preview-price').innerText = formatVND(p);
-      document.getElementById('preview-total').innerText = formatVND(q * p);
+      const shipTextEl = document.getElementById('preview-ship-text');
+      if (shipTextEl) {
+        shipTextEl.innerText = ship > 0 ? ` + Ship ${formatVND(ship)}` : '';
+      }
+      document.getElementById('preview-total').innerText = formatVND((q * p) + ship);
     }
 
     function setFilter(f) {

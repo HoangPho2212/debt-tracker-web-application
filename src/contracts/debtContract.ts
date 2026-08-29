@@ -49,6 +49,19 @@ export const CreateDebtContract: JayContract<CreateDebtInput, CreateDebtInput> =
       errors.push('Đơn giá không được vượt quá 100.000.000 đ.');
     }
 
+    // Validate ShippingFee (optional)
+    let shippingFee = 0;
+    if (payload.shippingFee !== undefined && payload.shippingFee !== null) {
+      const parsedShip = Number(payload.shippingFee);
+      if (isNaN(parsedShip) || parsedShip < 0) {
+        errors.push('Phí ship phải là số không âm.');
+      } else if (parsedShip > 10000000) {
+        errors.push('Phí ship tối đa là 10.000.000 đ.');
+      } else {
+        shippingFee = Math.round(parsedShip);
+      }
+    }
+
     // Validate Phone (optional)
     let phone: string | undefined = undefined;
     if (payload.phone && typeof payload.phone === 'string' && payload.phone.trim()) {
@@ -73,8 +86,10 @@ export const CreateDebtContract: JayContract<CreateDebtInput, CreateDebtInput> =
         name,
         quantity: Math.floor(quantity),
         pricePerMeal: Math.round(pricePerMeal),
+        shippingFee: shippingFee > 0 ? shippingFee : undefined,
         note: note || undefined,
         phone: phone || undefined,
+        customTimestamp: payload.customTimestamp,
       },
     };
   },
@@ -126,15 +141,22 @@ export const BackupPayloadContract: JayContract<BackupPayload, BackupPayload> = 
     }
 
     const sanitizedRecords: DebtorRecord[] = (payload.records || []).map((r) => {
-      const sanitizedHistory: DebtHistoryEntry[] = (r.history || []).map((h) => ({
-        entryId: String(h.entryId || Date.now()),
-        timestamp: String(h.timestamp || new Date().toISOString()),
-        displayDate: String(h.displayDate || ''),
-        quantity: Number(h.quantity) || 1,
-        pricePerMeal: Number(h.pricePerMeal) || 0,
-        amount: Number(h.amount) || ((Number(h.quantity) || 1) * (Number(h.pricePerMeal) || 0)),
-        note: h.note ? String(h.note) : undefined,
-      }));
+      const sanitizedHistory: DebtHistoryEntry[] = (r.history || []).map((h) => {
+        const q = Number(h.quantity) || 1;
+        const p = Number(h.pricePerMeal) || 0;
+        const s = Number(h.shippingFee) || 0;
+        const calculatedAmount = (q * p) + s;
+        return {
+          entryId: String(h.entryId || Date.now()),
+          timestamp: String(h.timestamp || new Date().toISOString()),
+          displayDate: String(h.displayDate || ''),
+          quantity: q,
+          pricePerMeal: p,
+          shippingFee: s > 0 ? s : undefined,
+          amount: Number(h.amount) || calculatedAmount,
+          note: h.note ? String(h.note) : undefined,
+        };
+      });
 
       const totalDebt = sanitizedHistory.reduce((sum, item) => sum + item.amount, 0);
 

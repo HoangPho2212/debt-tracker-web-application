@@ -9,6 +9,7 @@ import {
   Share2,
   Save,
   Clock,
+  Truck,
 } from 'lucide-react';
 import { DebtorViewState } from '../types/viewState';
 import { AppSettings, DebtHistoryEntry } from '../types/contracts';
@@ -20,7 +21,17 @@ interface DebtorDetailModalProps {
   onClose: () => void;
   onSettle: (debtorId: string) => void;
   onDeleteEntry: (debtorId: string, entryId: string) => void;
-  onUpdateEntry?: (debtorId: string, entryId: string, updates: { timestamp?: string; quantity?: number; pricePerMeal?: number; note?: string }) => void;
+  onUpdateEntry?: (
+    debtorId: string,
+    entryId: string,
+    updates: {
+      timestamp?: string;
+      quantity?: number;
+      pricePerMeal?: number;
+      shippingFee?: number;
+      note?: string;
+    }
+  ) => void;
   onUpdateInfo: (debtorId: string, name: string, phone?: string) => void;
   onDeleteDebtor: (debtorId: string) => void;
   onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
@@ -48,6 +59,7 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
   const [editEntryDateTime, setEditEntryDateTime] = useState('');
   const [editEntryQty, setEditEntryQty] = useState(1);
   const [editEntryPrice, setEditEntryPrice] = useState(35000);
+  const [editEntryShippingFee, setEditEntryShippingFee] = useState(0);
   const [editEntryNote, setEditEntryNote] = useState('');
 
   const isSettled = debtor.status === 'settled' || debtor.totalDebt === 0;
@@ -73,6 +85,7 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
     setEditEntryDateTime(localDt);
     setEditEntryQty(entry.quantity || 1);
     setEditEntryPrice(entry.pricePerMeal || 35000);
+    setEditEntryShippingFee(entry.shippingFee || 0);
     setEditEntryNote(entry.note || '');
   };
 
@@ -91,6 +104,7 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
       timestamp: isoTimestamp,
       quantity: Math.max(1, Number(editEntryQty) || 1),
       pricePerMeal: Math.max(0, Number(editEntryPrice) || 0),
+      shippingFee: Math.max(0, Number(editEntryShippingFee) || 0),
       note: editEntryNote.trim(),
     });
 
@@ -105,7 +119,11 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
     billText += `-------------------------\n`;
 
     debtor.history.forEach((h, idx) => {
-      billText += `${idx + 1}. ${h.displayDate || h.timestamp}: ${h.quantity} suất (${formatCurrency(h.pricePerMeal)}) = ${formatCurrency(h.amount)}`;
+      billText += `${idx + 1}. ${h.displayDate || h.timestamp}: ${h.quantity} suất (${formatCurrency(h.pricePerMeal)})`;
+      if (h.shippingFee && h.shippingFee > 0) {
+        billText += ` + Ship ${formatCurrency(h.shippingFee)}`;
+      }
+      billText += ` = ${formatCurrency(h.amount)}`;
       if (h.note) billText += ` [${h.note}]`;
       billText += `\n`;
     });
@@ -160,7 +178,7 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-lg"
+                    className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-xs"
                   >
                     Lưu
                   </button>
@@ -178,63 +196,85 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
             {!isEditing && debtor.phone && (
               <a
                 href={`tel:${debtor.phone}`}
-                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 mt-1"
+                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-emerald-600 mt-1"
               >
-                <Phone className="w-3 h-3 text-slate-400" />
+                <Phone className="w-3 h-3 text-emerald-600" />
                 <span>{debtor.phone}</span>
               </a>
             )}
-
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Tổng nợ:</span>
-              <span
-                className={`text-xl font-black ${
-                  isSettled ? 'text-emerald-600' : 'text-rose-600'
-                }`}
-              >
-                {debtor.formattedTotalDebt}
-              </span>
-              {isSettled && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  Đã thanh toán
-                </span>
-              )}
-            </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-full transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
             aria-label="Đóng"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* History List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
-              Lịch sử các lần ăn nợ ({debtor.history.length})
-            </h4>
-            {debtor.history.length > 0 && (
+        {/* Total Debt Banner */}
+        <div
+          className={`p-4 ${
+            isSettled
+              ? 'bg-emerald-50/70 border-b border-emerald-100'
+              : 'bg-rose-50/70 border-b border-rose-100'
+          } flex items-center justify-between`}
+        >
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block">
+              Tổng số tiền đang nợ
+            </span>
+            <span
+              className={`text-2xl font-black ${
+                isSettled ? 'text-emerald-700' : 'text-rose-600'
+              }`}
+            >
+              {debtor.formattedTotalDebt}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyBill}
+              className="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-all"
+              title="Sao chép hóa đơn gửi Zalo/SMS"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Gửi Zalo</span>
+            </button>
+
+            {!isSettled && (
               <button
                 type="button"
-                onClick={handleCopyBill}
-                className="text-xs text-emerald-700 font-semibold flex items-center gap-1 hover:underline active:scale-95"
+                onClick={() => {
+                  onSettle(debtor.id);
+                  onShowToast(`Đã thu hết nợ của ${debtor.name}!`, 'success');
+                }}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-all"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Sao chép gửi Zalo</span>
+                <Check className="w-4 h-4" />
+                <span>Đã Thu Tiền</span>
               </button>
             )}
+          </div>
+        </div>
+
+        {/* History List */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Lịch sử các lần ghi nợ ({debtor.history.length})
+            </h3>
           </div>
 
           {debtor.history.length === 0 ? (
             <div className="text-center py-8 text-slate-400 text-xs">
-              Chưa có bản ghi lịch sử nào.
+              Chưa có lịch sử bữa ăn nào được ghi nhận.
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {debtor.history.map((entry) => {
                 const isEditingThisEntry = editingEntryId === entry.entryId;
 
@@ -242,11 +282,11 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                   return (
                     <div
                       key={entry.entryId}
-                      className="p-3 bg-amber-50/80 rounded-2xl border border-amber-300 space-y-2.5 animate-scale-up"
+                      className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-300 space-y-2.5 shadow-sm"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
+                      <div className="flex items-center justify-between text-xs font-bold text-amber-900 border-b border-amber-200/80 pb-1.5">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-700" />
                           <span>Chỉnh sửa ngày giờ & chi tiết</span>
                         </span>
                       </div>
@@ -263,10 +303,10 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                            Số lượng suất:
+                            Số suất:
                           </label>
                           <input
                             type="number"
@@ -286,6 +326,19 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                             min="0"
                             value={editEntryPrice}
                             onChange={(e) => setEditEntryPrice(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                            Phí ship (VNĐ):
+                          </label>
+                          <input
+                            type="number"
+                            step="1000"
+                            min="0"
+                            value={editEntryShippingFee}
+                            onChange={(e) => setEditEntryShippingFee(Number(e.target.value) || 0)}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900"
                           />
                         </div>
@@ -315,7 +368,7 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSaveEditEntry(entry.entryId)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer"
                         >
                           <Save className="w-3.5 h-3.5" />
                           <span>Lưu Thay Đổi</span>
@@ -336,12 +389,18 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                         <span>{entry.displayDate || entry.timestamp}</span>
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
                         <span className="font-bold text-slate-800">
                           {entry.quantity} suất
                         </span>
                         <span>×</span>
                         <span>{formatCurrency(entry.pricePerMeal)}</span>
+                        {entry.shippingFee && entry.shippingFee > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded border border-amber-200">
+                            <Truck className="w-2.5 h-2.5 text-amber-700" />
+                            + Ship {formatCurrency(entry.shippingFee)}
+                          </span>
+                        )}
                         <span>=</span>
                         <span className="font-bold text-rose-600">
                           {formatCurrency(entry.amount)}
@@ -361,8 +420,8 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleStartEditEntry(entry)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg min-w-[32px] min-h-[32px] flex items-center justify-center"
-                          title="Sửa ngày giờ / chi tiết"
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg min-w-[32px] min-h-[32px] flex items-center justify-center cursor-pointer"
+                          title="Sửa ngày giờ / chi tiết / phí ship"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -378,23 +437,23 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
                                 setConfirmDeleteId(null);
                                 onShowToast('Đã xóa bữa ăn nợ này.', 'info');
                               }}
-                              className="px-2 py-1 bg-rose-600 text-white text-[10px] font-bold rounded"
+                              className="px-2 py-1 bg-rose-600 text-white text-xs font-bold rounded"
                             >
-                              Xóa
+                              Có
                             </button>
                             <button
                               onClick={() => setConfirmDeleteId(null)}
-                              className="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded"
+                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded"
                             >
-                              Hủy
+                              Không
                             </button>
                           </div>
                         </div>
                       ) : (
                         <button
                           onClick={() => setConfirmDeleteId(entry.entryId)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg min-w-[32px] min-h-[32px] flex items-center justify-center"
-                          title="Xóa bữa này"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center cursor-pointer"
+                          title="Xóa bữa ăn này"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -407,54 +466,46 @@ export const DebtorDetailModal: React.FC<DebtorDetailModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer Actions */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
-          {!isSettled && (
+        {/* Modal Footer: Delete Entire Debtor Profile */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+          {!confirmDeleteDebtor ? (
             <button
-              onClick={() => {
-                onSettle(debtor.id);
-                onClose();
-              }}
-              className="w-full min-h-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+              onClick={() => setConfirmDeleteDebtor(true)}
+              className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-rose-50 cursor-pointer"
             >
-              <Check className="w-4 h-4" />
-              <span>XÁC NHẬN ĐÃ THANH TOÁN HẾT ({debtor.formattedTotalDebt})</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa hồ sơ khách này</span>
             </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-rose-600 font-bold">
+                Xóa vĩnh viễn khách này?
+              </span>
+              <button
+                onClick={() => {
+                  onDeleteDebtor(debtor.id);
+                  onClose();
+                  onShowToast(`Đã xóa hồ sơ khách hàng ${debtor.name}.`, 'info');
+                }}
+                className="px-2.5 py-1 bg-rose-600 text-white text-xs font-bold rounded-lg shadow-xs"
+              >
+                Xác nhận
+              </button>
+              <button
+                onClick={() => setConfirmDeleteDebtor(false)}
+                className="px-2.5 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg"
+              >
+                Hủy
+              </button>
+            </div>
           )}
 
-          {/* Delete entire customer profile */}
-          <div className="pt-1 flex justify-center">
-            {confirmDeleteDebtor ? (
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-rose-600 font-bold">Xóa vĩnh viễn khách này?</span>
-                <button
-                  onClick={() => {
-                    onDeleteDebtor(debtor.id);
-                    onClose();
-                    onShowToast(`Đã xóa hồ sơ khách "${debtor.name}".`, 'info');
-                  }}
-                  className="px-3 py-1 bg-rose-600 text-white rounded font-bold"
-                >
-                  Xác nhận xóa
-                </button>
-                <button
-                  onClick={() => setConfirmDeleteDebtor(false)}
-                  className="px-3 py-1 bg-slate-200 text-slate-700 rounded"
-                >
-                  Hủy
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteDebtor(true)}
-                className="text-[11px] text-slate-400 hover:text-rose-600 flex items-center gap-1"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Xóa toàn bộ hồ sơ khách hàng này</span>
-              </button>
-            )}
-          </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer"
+          >
+            Đóng
+          </button>
         </div>
       </div>
     </div>

@@ -39,10 +39,25 @@ describe('JayContract: CreateDebtContract', () => {
     expect(res.errors).toContain('Số lượng suất cơm phải lớn hơn 0.');
   });
 
-  it('should fail when pricePerMeal is negative', () => {
-    const res = CreateDebtContract.validate({ name: 'Chị Lan', quantity: 1, pricePerMeal: -100 });
+  it('should validate and sanitize valid debt input with shipping fee', () => {
+    const input = {
+      name: 'Chị Lan Ngân Hàng',
+      quantity: 3,
+      pricePerMeal: 35000,
+      shippingFee: 15000,
+      note: 'Ship lầu 4',
+    };
+
+    const res = CreateDebtContract.validate(input);
+    expect(res.isValid).toBe(true);
+    expect(res.sanitized?.shippingFee).toBe(15000);
+    expect(res.sanitized?.name).toBe('Chị Lan Ngân Hàng');
+  });
+
+  it('should reject negative shipping fee', () => {
+    const res = CreateDebtContract.validate({ name: 'Chị Lan', quantity: 1, pricePerMeal: 35000, shippingFee: -5000 });
     expect(res.isValid).toBe(false);
-    expect(res.errors).toContain('Đơn giá không hợp lệ.');
+    expect(res.errors).toContain('Phí ship phải là số không âm.');
   });
 });
 

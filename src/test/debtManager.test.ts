@@ -248,4 +248,60 @@ describe('DebtManager Business Logic', () => {
     expect(updated[0].history[0].note).toBe('Cơm gà xối mỡ');
     expect(updated[0].history[0].displayDate).toContain('27/08/2026');
   });
+
+  it('should calculate total amount correctly with shipping fee', () => {
+    const initialRecords: DebtorRecord[] = [];
+    const input = {
+      name: 'Chị Lan Giao Hàng',
+      quantity: 2,
+      pricePerMeal: 35000,
+      shippingFee: 15000,
+      note: 'Ship văn phòng',
+    };
+
+    const { updatedRecords, affectedRecord } = DebtManager.addDebtEntry(initialRecords, input);
+    expect(updatedRecords).toHaveLength(1);
+    // 2 * 35000 + 15000 = 85000
+    expect(affectedRecord.totalDebt).toBe(85000);
+    expect(affectedRecord.history[0].quantity).toBe(2);
+    expect(affectedRecord.history[0].pricePerMeal).toBe(35000);
+    expect(affectedRecord.history[0].shippingFee).toBe(15000);
+    expect(affectedRecord.history[0].amount).toBe(85000);
+  });
+
+  it('should update shipping fee in history entry properly', () => {
+    const initialRecords: DebtorRecord[] = [
+      {
+        id: 'KH_1',
+        name: 'Anh Tuấn',
+        normalizedName: 'anh tuan',
+        totalDebt: 35000,
+        status: 'active',
+        createdAt: '2026-08-28T10:00:00.000Z',
+        updatedAt: '2026-08-28T10:00:00.000Z',
+        history: [
+          {
+            entryId: 'ENT_1',
+            timestamp: '2026-08-28T10:00:00.000Z',
+            displayDate: '10:00 28/08/2026',
+            quantity: 1,
+            pricePerMeal: 35000,
+            amount: 35000,
+          },
+        ],
+      },
+    ];
+
+    const updated = DebtManager.updateHistoryEntry(initialRecords, {
+      debtorId: 'KH_1',
+      entryId: 'ENT_1',
+      quantity: 1,
+      pricePerMeal: 35000,
+      shippingFee: 10000,
+    });
+
+    expect(updated[0].totalDebt).toBe(45000); // 35k + 10k
+    expect(updated[0].history[0].shippingFee).toBe(10000);
+    expect(updated[0].history[0].amount).toBe(45000);
+  });
 });

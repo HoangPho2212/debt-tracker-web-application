@@ -91,6 +91,12 @@ function doPost(e) {
       if (record.history && record.history.length > 0) {
         for (var j = 0; j < record.history.length; j++) {
           var entry = record.history[j];
+          var noteText = entry.note || "";
+          if (entry.shippingFee && Number(entry.shippingFee) > 0) {
+            var shipNote = "Phí ship: " + Number(entry.shippingFee).toLocaleString("vi-VN") + "đ";
+            noteText = noteText ? noteText + " | " + shipNote : shipNote;
+          }
+
           rows.push([
             record.id,
             record.name,
@@ -101,7 +107,7 @@ function doPost(e) {
             Number(entry.amount) || 0,
             Number(record.totalDebt) || 0,
             statusText,
-            entry.note || "",
+            noteText,
             record.updatedAt || new Date().toISOString()
           ]);
         }

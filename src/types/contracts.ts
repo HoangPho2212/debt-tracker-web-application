@@ -9,8 +9,9 @@ export interface DebtHistoryEntry {
   displayDate: string;   // Vietnamese format: "12:30 28/08/2026"
   quantity: number;      // Quantity >= 1
   pricePerMeal: number;  // Price in VND >= 0
-  amount: number;        // = quantity * pricePerMeal
-  note?: string;         // Note: e.g. "Cơm sườn trứng", "Mang về"
+  shippingFee?: number;  // Phí giao hàng (VNĐ) >= 0 (Tùy chọn)
+  amount: number;        // = (quantity * pricePerMeal) + (shippingFee || 0)
+  note?: string;         // Note: e.g. "Cơm sườn trứng", "Ship công ty FPT"
 }
 
 export interface DebtorRecord {
@@ -42,6 +43,7 @@ export interface CreateDebtInput {
   name: string;
   quantity: number;
   pricePerMeal: number;
+  shippingFee?: number;     // Phí giao hàng (tùy chọn)
   note?: string;
   phone?: string;
   customTimestamp?: string; // ISO string or datetime-local format
@@ -69,6 +71,7 @@ export interface UpdateHistoryEntryInput {
   timestamp?: string;
   quantity?: number;
   pricePerMeal?: number;
+  shippingFee?: number;
   note?: string;
 }
 
@@ -107,10 +110,22 @@ export interface ValidationResult<T> {
   sanitized?: T;
 }
 
-/**
- * JayContract Pattern interface
- */
 export interface JayContract<TInput, TOutput> {
-  validate(input: unknown): ValidationResult<TInput>;
+  validate(input: unknown): ValidationResult<TOutput>;
   execute(input: TInput): TOutput;
+}
+
+export type DebtFilterType = 'all' | 'active' | 'settled';
+
+export interface DebtSummaryViewState {
+  totalActiveDebt: number;      // Total amount currently owed
+  activeDebtorsCount: number;   // Number of people who owe money
+  settledDebtorsCount: number;  // Number of people who fully paid
+  todayMealCount: number;       // Number of meals added today
+  todayDebtAmount: number;      // Total debt incurred today
+}
+
+export interface DebtorViewState extends DebtorRecord {
+  lastDebtDate: string;
+  entryCount: number;
 }

@@ -311,7 +311,7 @@ export const App: React.FC = () => {
   const handleUpdateHistoryEntry = (
     debtorId: string,
     entryId: string,
-    updates: { timestamp?: string; quantity?: number; pricePerMeal?: number; note?: string }
+    updates: { timestamp?: string; quantity?: number; pricePerMeal?: number; shippingFee?: number; note?: string }
   ) => {
     const updated = DebtManager.updateHistoryEntry(records, {
       debtorId,
@@ -319,6 +319,10 @@ export const App: React.FC = () => {
       ...updates,
     });
     setRecords(updated);
+    StorageEngine.saveRecords(updated);
+    if (settingsRef.current.appsScriptUrl) {
+      triggerGoogleSheetsPush(updated, settingsRef.current);
+    }
   };
 
   const handleUpdateDebtorInfo = (debtorId: string, name: string, phone?: string) => {

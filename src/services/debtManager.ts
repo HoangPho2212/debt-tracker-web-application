@@ -40,7 +40,8 @@ export const DebtManager = {
 
     const isoTimestamp = entryDate.toISOString();
     const displayDate = formatVietnameseDateTime(entryDate);
-    const amount = validated.quantity * validated.pricePerMeal;
+    const shippingFee = validated.shippingFee || 0;
+    const amount = (validated.quantity * validated.pricePerMeal) + shippingFee;
 
     const newEntry: DebtHistoryEntry = {
       entryId: generateId('ENT'),
@@ -48,6 +49,7 @@ export const DebtManager = {
       displayDate,
       quantity: validated.quantity,
       pricePerMeal: validated.pricePerMeal,
+      shippingFee: shippingFee > 0 ? shippingFee : undefined,
       amount,
       note: validated.note,
     };
@@ -144,7 +146,7 @@ export const DebtManager = {
   },
 
   /**
-   * Updates an existing history entry (timestamp, quantity, price, note)
+   * Updates an existing history entry (timestamp, quantity, price, shippingFee, note)
    */
   updateHistoryEntry(
     records: DebtorRecord[],
@@ -167,7 +169,8 @@ export const DebtManager = {
 
         const quantity = input.quantity !== undefined ? Math.max(1, Number(input.quantity)) : entry.quantity;
         const pricePerMeal = input.pricePerMeal !== undefined ? Math.max(0, Number(input.pricePerMeal)) : entry.pricePerMeal;
-        const amount = quantity * pricePerMeal;
+        const shippingFee = input.shippingFee !== undefined ? Math.max(0, Number(input.shippingFee)) : (entry.shippingFee || 0);
+        const amount = (quantity * pricePerMeal) + shippingFee;
 
         return {
           ...entry,
@@ -175,6 +178,7 @@ export const DebtManager = {
           displayDate: formatVietnameseDateTime(entryDate),
           quantity,
           pricePerMeal,
+          shippingFee: shippingFee > 0 ? shippingFee : undefined,
           amount,
           note: input.note !== undefined ? (input.note.trim() || undefined) : entry.note,
         };
