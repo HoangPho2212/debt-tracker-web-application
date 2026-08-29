@@ -90,7 +90,7 @@ export const GoogleSheetsSyncEngine = {
   },
 
   /**
-   * PULL: Fetches latest cloud records from Google Sheets (via doGet) with robust multi-format parsing
+   * PULL: Fetches latest cloud records from Google Sheets (via doGet)
    */
   async fetchRecordsFromGoogleSheets(
     settings: AppSettings
@@ -203,13 +203,16 @@ export const GoogleSheetsSyncEngine = {
   },
 
   /**
-   * Merge Strategy: Combines Local and Cloud records cleanly with strict Vietnamese normalization and timestamp resolution
+   * Merge Strategy: Combines Local and Cloud records cleanly
    */
   mergeCloudAndLocalRecords(
     localRecords: DebtorRecord[],
     cloudRecords: DebtorRecord[]
   ): DebtorRecord[] {
-    if (!cloudRecords || cloudRecords.length === 0) return localRecords;
+    if (!cloudRecords || cloudRecords.length === 0) {
+      return [];
+    }
+
     if (!localRecords || localRecords.length === 0) {
       return cloudRecords.map((c) => ({
         ...c,

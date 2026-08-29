@@ -302,6 +302,10 @@ export const App: React.FC = () => {
   const handleDeleteHistoryEntry = (debtorId: string, entryId: string) => {
     const updated = DebtManager.deleteHistoryEntry(records, debtorId, entryId);
     setRecords(updated);
+    StorageEngine.saveRecords(updated);
+    if (settingsRef.current.appsScriptUrl) {
+      triggerGoogleSheetsPush(updated, settingsRef.current);
+    }
   };
 
   const handleUpdateHistoryEntry = (
@@ -325,8 +329,12 @@ export const App: React.FC = () => {
   const handleDeleteDebtor = (debtorId: string) => {
     const updated = DebtManager.deleteDebtor(records, debtorId);
     setRecords(updated);
+    StorageEngine.saveRecords(updated);
     if (selectedDebtorId === debtorId) {
       setSelectedDebtorId(null);
+    }
+    if (settingsRef.current.appsScriptUrl) {
+      triggerGoogleSheetsPush(updated, settingsRef.current);
     }
   };
 
@@ -345,8 +353,15 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
+    const currentSettings = settingsRef.current;
     setRecords([]);
+    StorageEngine.saveRecords([]);
+    if (currentSettings.appsScriptUrl) {
+      setSyncStatus('syncing');
+      await GoogleSheetsSyncEngine.syncToGoogleSheets([], currentSettings);
+      setSyncStatus('synced');
+    }
     setSettings(DEFAULT_SETTINGS);
   };
 
