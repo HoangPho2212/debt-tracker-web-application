@@ -235,7 +235,9 @@ export const DebtManager = {
     selectedId?: string,
     isQuickAddOpen: boolean = false,
     isSettingsOpen: boolean = false,
-    isBackupRestoreOpen: boolean = false
+    isBackupRestoreOpen: boolean = false,
+    syncStatus: import('../types/contracts').SyncStatus = 'idle',
+    lastSyncedAt?: string
   ): AppViewState {
     const allDebtorViewStates = records.map((r) => this.toDebtorViewState(r));
 
@@ -279,6 +281,8 @@ export const DebtManager = {
       isQuickAddOpen,
       isSettingsOpen,
       isBackupRestoreOpen,
+      syncStatus,
+      lastSyncedAt,
     };
   },
 };

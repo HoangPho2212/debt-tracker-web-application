@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sổ Ghi Nợ Quán Cơm - Auto Sync 2 Chiều Google Sheets</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    input, select, textarea { font-size: 16px !important; }
+    .animate-spin-fast { animation: spin 0.8s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- ============================================================================== -->
+  <!-- ⚙️ CẤU HÌNH LIÊN KẾT GOOGLE SHEETS TẠI ĐÂY -->
+  <!-- ============================================================================== -->
+  <script>
+    window.DEFAULT_GOOGLE_SHEET_URL = "";
+    window.DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPQVci49QP2rWDUHkTRbSnra4OawodYLezXA4zgbR5oLlZM6uqMun7Q1r-Mvk4u7og/exec";
+  </script>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-11/12 max-w-md pointer-events-none"></div>
+
+  <!-- HEADER -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-3 sm:px-4 py-2.5 shadow-xs">
+    <div class="max-w-xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm shadow-orange-500/20 flex-shrink-0 font-bold">
+          🍚
+        </div>
+        <div class="min-w-0">
+          <h1 id="header-title" class="text-sm sm:text-base font-bold text-slate-900 leading-tight truncate">
+            Sổ Ghi Nợ Quán Cơm
+          </h1>
+          <div class="flex items-center gap-1.5 mt-0.5" id="sync-status-badge">
+            <span class="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 cursor-pointer" onclick="openSettingsModal()">
+              <span>📊 Chưa kết nối Sheets</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+        <!-- Nút Xem trong Trang tính -->
+        <button id="btn-view-sheet" onclick="handleOpenSheet()" class="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 min-h-[40px] shadow-xs border bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300">
+          <div class="w-5 h-5 rounded-md bg-[#0F9D58] flex items-center justify-center text-white text-[11px] font-bold">
+            田
+          </div>
+          <span class="hidden xs:inline">Trang Tính</span>
+          <i data-lucide="external-link" class="w-3 h-3 text-emerald-700/70"></i>
+        </button>
+
+        <!-- Nút Làm Mới / Đồng Bộ 2 Chiều -->
+        <button id="btn-refresh" onclick="triggerManualPull()" class="p-2 rounded-xl text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Tải dữ liệu mới nhất từ Google Sheets">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Nút Ghi Nợ -->
+        <button onclick="toggleQuickAdd()" class="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/30">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Ghi Nợ</span>
+        </button>
+
+        <!-- Nút Cài Đặt -->
+        <button onclick="openSettingsModal()" class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Cài đặt">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 w-full max-w-xl mx-auto px-4 py-4 space-y-4 pb-20">
+    <!-- Top Summary Cards -->
+    <div class="grid grid-cols-3 gap-2 sm:gap-3">
+      <div class="bg-gradient-to-br from-rose-50 to-red-100/80 border border-rose-200/80 rounded-2xl p-3 shadow-xs">
+        <div class="text-rose-700 text-xs font-semibold mb-1 flex items-center gap-1">
+          <i data-lucide="wallet" class="w-3.5 h-3.5"></i>
+          <span class="truncate">Tổng nợ quán</span>
+        </div>
+        <div id="sum-total-debt" class="text-base sm:text-lg font-black text-rose-600 tracking-tight">0 đ</div>
+        <div id="sum-active-debtors" class="text-[10px] text-rose-600/80 mt-0.5">0 khách chưa trả</div>
+      </div>
+
+      <div class="bg-gradient-to-br from-amber-50 to-orange-100/70 border border-amber-200/80 rounded-2xl p-3 shadow-xs">
+        <div class="text-amber-700 text-xs font-semibold mb-1 flex items-center gap-1">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          <span class="truncate">Khách nợ</span>
+        </div>
+        <div id="sum-debtors-count" class="text-base sm:text-lg font-black text-amber-900 tracking-tight">0 <span class="text-xs font-normal">người</span></div>
+        <div id="sum-settled-count" class="text-[10px] text-amber-700/80 mt-0.5">0 đã trả xong</div>
+      </div>
+
+      <div class="bg-gradient-to-br from-emerald-50 to-teal-100/70 border border-emerald-200/80 rounded-2xl p-3 shadow-xs">
+        <div class="text-emerald-700 text-xs font-semibold mb-1 flex items-center gap-1">
+          <i data-lucide="utensils" class="w-3.5 h-3.5"></i>
+          <span class="truncate">Hôm nay</span>
+        </div>
+        <div id="sum-today-amount" class="text-base sm:text-lg font-black text-emerald-700 tracking-tight">0 đ</div>
+        <div id="sum-today-meals" class="text-[10px] text-emerald-600/80 mt-0.5">0 suất ghi nợ</div>
+      </div>
+    </div>
+
+    <!-- Quick Add Form -->
+    <div id="quick-add-container" class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-md transition-all">
+      <div class="flex items-center justify-between mb-3">
+        <h2 id="form-title" class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+          <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600"></i>
+          <span>Ghi Nợ Suất Cơm Mới</span>
+        </h2>
+      </div>
+
+      <form id="quick-add-form" onsubmit="handleCreateDebt(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tên khách hàng <span class="text-rose-500">*</span></label>
+          <input id="input-name" type="text" required placeholder="VD: Anh Tuấn Viettel, Chị Lan..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]" autocomplete="off" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Số lượng suất</label>
+            <div class="flex items-center bg-slate-50 border border-slate-300 rounded-xl overflow-hidden min-h-[44px]">
+              <button type="button" onclick="adjustQty(-1)" class="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 text-lg font-bold">-</button>
+              <input id="input-qty" type="number" min="1" max="1000" value="1" oninput="updateTotalPreview()" class="w-full text-center font-bold text-base text-slate-900 bg-transparent focus:outline-none" />
+              <button type="button" onclick="adjustQty(1)" class="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 text-lg font-bold">+</button>
+            </div>
+            <div class="flex gap-1 mt-1.5">
+              <button type="button" onclick="setQty(1)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200">1</button>
+              <button type="button" onclick="setQty(2)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200">2</button>
+              <button type="button" onclick="setQty(3)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200">3</button>
+              <button type="button" onclick="setQty(5)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200">5</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Đơn giá / suất (đ)</label>
+            <input id="input-price" type="number" step="1000" min="0" value="35000" oninput="updateTotalPreview()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]" />
+            <div class="flex gap-1 mt-1.5">
+              <button type="button" onclick="setPrice(30000)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200">30k</button>
+              <button type="button" onclick="setPrice(35000)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200">35k</button>
+              <button type="button" onclick="setPrice(40000)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200">40k</button>
+              <button type="button" onclick="setPrice(50000)" class="flex-1 py-1 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-lg border border-slate-200">50k</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ghi chú món ăn (tùy chọn)</label>
+          <input id="input-note" type="text" placeholder="VD: Cơm sườn, Thêm trứng..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[40px]" />
+          <div class="flex flex-wrap gap-1 mt-1.5">
+            <button type="button" onclick="appendNote('Cơm sườn')" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 border border-slate-200">+ Cơm sườn</button>
+            <button type="button" onclick="appendNote('Cơm gà')" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 border border-slate-200">+ Cơm gà</button>
+            <button type="button" onclick="appendNote('Thêm trứng')" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 border border-slate-200">+ Thêm trứng</button>
+            <button type="button" onclick="appendNote('Mang về')" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 border border-slate-200">+ Mang về</button>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-2 px-1">
+            <span>Thành tiền (<span id="preview-qty">1</span> suất × <span id="preview-price">35.000 đ</span>):</span>
+            <span id="preview-total" class="text-base font-black text-rose-600">35.000 đ</span>
+          </div>
+          <button type="submit" class="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+            <i data-lucide="check" class="w-5 h-5"></i>
+            <span>+ GHI NỢ NGAY</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="space-y-2.5">
+      <div class="relative">
+        <input id="search-input" type="text" oninput="handleSearch(this.value)" placeholder="Tìm tên khách, số ĐT, món ăn..." class="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs min-h-[44px]" />
+        <span class="absolute left-3 top-3 text-slate-400">🔍</span>
+      </div>
+
+      <div class="flex bg-slate-100/90 p-1 rounded-xl gap-1">
+        <button id="filter-active" onclick="setFilter('active')" class="flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-white text-rose-700 shadow-xs">
+          Đang nợ (<span id="badge-active-count">0</span>)
+        </button>
+        <button id="filter-all" onclick="setFilter('all')" class="flex-1 py-2 px-2 text-xs font-semibold rounded-lg text-slate-600">
+          Tất cả (<span id="badge-all-count">0</span>)
+        </button>
+        <button id="filter-settled" onclick="setFilter('settled')" class="flex-1 py-2 px-2 text-xs font-semibold rounded-lg text-slate-600">
+          Đã trả (<span id="badge-settled-count">0</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- Debtors List -->
+    <div id="debtors-list" class="space-y-3"></div>
+  </main>
+
+  <!-- MODAL CÀI ĐẶT & GOOGLE SHEETS -->
+  <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div class="w-full max-w-lg bg-white rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-bold text-slate-900">⚙️ Cài Đặt Quán & Google Sheets</h3>
+        <button onclick="closeSettingsModal()" class="p-2 text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+      </div>
+
+      <form onsubmit="handleSaveSettings(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tên quán cơm</label>
+          <input id="set-restaurant-name" type="text" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Đơn giá mặc định (VNĐ)</label>
+          <input id="set-default-price" type="number" step="1000" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold" />
+        </div>
+
+        <div class="pt-2 border-t border-slate-100 space-y-3">
+          <h4 class="text-xs font-bold uppercase text-emerald-700">Kết Nối Google Sheets (Tự Động Đồng Bộ 2 Chiều)</h4>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Link Google Sheets (Xem trực tiếp)</label>
+            <input id="set-sheet-url" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Google Apps Script Web App URL (/exec)</label>
+            <input id="set-script-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono" />
+          </div>
+          <button type="button" onclick="triggerManualPull()" class="w-full py-2.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+            <span>🔄 Đồng Bộ & Tải Dữ Liệu Từ Google Sheets Ngay</span>
+          </button>
+        </div>
+
+        <div class="flex gap-2 pt-3">
+          <button type="button" onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl">Đóng</button>
+          <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md">Lưu Cài Đặt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const STORAGE_KEY = 'QUAN_COM_DEBT_RECORDS_V1';
+    const SETTINGS_KEY = 'QUAN_COM_SETTINGS_V1';
+
+    let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+
+    settings = {
+      restaurantName: settings.restaurantName || "Sổ Ghi Nợ Quán Cơm",
+      defaultMealPrice: settings.defaultMealPrice || 35000,
+      googleSheetUrl: settings.googleSheetUrl || window.DEFAULT_GOOGLE_SHEET_URL || "",
+      appsScriptUrl: settings.appsScriptUrl || window.DEFAULT_APPS_SCRIPT_URL || "",
+      lastSyncedAt: settings.lastSyncedAt || null,
+      ...settings
+    };
+
+    let activeFilter = 'active';
+    let searchQuery = '';
+    let syncStatus = settings.appsScriptUrl ? (settings.lastSyncedAt ? 'synced' : 'idle') : 'unconfigured';
+
+    function normalizeVi(str) {
+      if (!str) return '';
+      return str.toLowerCase()
+        .replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, 'a')
+        .replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, 'e')
+        .replace(/ì|í|ị|ỉ|ĩ/g, 'i')
+        .replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, 'o')
+        .replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, 'u')
+        .replace(/ỳ|ý|ỵ|ỷ|ỹ/g, 'y')
+        .replace(/đ/g, 'd')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ').trim();
+    }
+
+    function formatVND(num) {
+      return new Intl.NumberFormat('vi-VN').format(Math.round(num || 0)) + ' đ';
+    }
+
+    function formatVNTime(dateStr) {
+      const d = dateStr ? new Date(dateStr) : new Date();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const MM = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${hh}:${mm} ${dd}/${MM}/${yyyy}`;
+    }
+
+    function isToday(dateStr) {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      const now = new Date();
+      return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+
+    // PUSH: Gửi dữ liệu local lên Google Sheets
+    let syncTimeout = null;
+    function scheduleAutoPush() {
+      if (!settings.appsScriptUrl) {
+        updateSyncBadge('unconfigured');
+        return;
+      }
+      if (!navigator.onLine) {
+        updateSyncBadge('offline');
+        return;
+      }
+
+      updateSyncBadge('syncing');
+      if (syncTimeout) clearTimeout(syncTimeout);
+      syncTimeout = setTimeout(async () => {
+        try {
+          const payload = {
+            app: 'QuanComDebtTracker',
+            timestamp: new Date().toISOString(),
+            restaurantName: settings.restaurantName,
+            records: records
+          };
+
+          await fetch(settings.appsScriptUrl.trim(), {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+
+          const now = new Date().toISOString();
+          settings.lastSyncedAt = now;
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          updateSyncBadge('synced', now);
+        } catch (e) {
+          console.warn('Sync push error:', e);
+          updateSyncBadge('error');
+        }
+      }, 1200);
+    }
+
+    // PULL: Tải dữ liệu từ Google Sheets về máy & Merge thông minh
+    let isPulling = false;
+    async function triggerManualPull(silent = false) {
+      if (!settings.appsScriptUrl) {
+        if (!silent) openSettingsModal();
+        return;
+      }
+      if (!navigator.onLine) {
+        updateSyncBadge('offline');
+        if (!silent) showToast('Mất mạng. Dữ liệu đang được lưu tạm trên máy.', 'info');
+        return;
+      }
+      if (isPulling) return;
+      isPulling = true;
+
+      updateSyncBadge('syncing');
+      try {
+        const res = await fetch(settings.appsScriptUrl.trim(), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        isPulling = false;
+
+        if (data && Array.isArray(data.records)) {
+          // Merge dữ liệu Cloud với Local
+          const mergedMap = new Map();
+          data.records.forEach(c => {
+            mergedMap.set(c.normalizedName || normalizeVi(c.name), c);
+          });
+          records.forEach(l => {
+            const key = l.normalizedName || normalizeVi(l.name);
+            const ex = mergedMap.get(key);
+            if (!ex) {
+              mergedMap.set(key, l);
+            } else {
+              const lTime = new Date(l.updatedAt).getTime() || 0;
+              const cTime = new Date(ex.updatedAt).getTime() || 0;
+              const dominant = lTime >= cTime ? l : ex;
+              mergedMap.set(key, dominant);
+            }
+          });
+
+          records = Array.from(mergedMap.values()).sort((a, b) => {
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          });
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+          render();
+
+          const now = new Date().toISOString();
+          settings.lastSyncedAt = now;
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          updateSyncBadge('synced', now);
+
+          if (!silent) {
+            showToast(`Đã đồng bộ dữ liệu mới nhất từ Google Sheets (${records.length} khách).`);
+          }
+        }
+      } catch (err) {
+        isPulling = false;
+        console.warn('Sync pull error:', err);
+        updateSyncBadge('error');
+        if (!silent) showToast('Không thể tải từ Google Sheets.', 'error');
+      }
+    }
+
+    function updateSyncBadge(status, time) {
+      syncStatus = status;
+      const el = document.getElementById('sync-status-badge');
+      if (!el) return;
+
+      if (status === 'syncing') {
+        el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+          <span class="inline-block animate-spin-fast">🔄</span> <span>Đang đồng bộ...</span>
+        </span>`;
+      } else if (status === 'synced') {
+        const timeStr = time ? new Date(time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+        el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 cursor-pointer" onclick="triggerManualPull()" title="Đã đồng bộ 2 chiều. Bấm để làm mới ngay.">
+          <span>🟢 Đã lưu Sheets (${timeStr})</span>
+        </span>`;
+      } else if (status === 'offline') {
+        el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+          <span>⚪ Lưu tạm offline</span>
+        </span>`;
+      } else if (status === 'error') {
+        el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 cursor-pointer" onclick="triggerManualPull()">
+          <span>🔴 Lỗi đồng bộ (Bấm thử lại)</span>
+        </span>`;
+      } else {
+        el.innerHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 hover:text-emerald-700 cursor-pointer" onclick="openSettingsModal()">
+          <span>📊 Kết nối Sheets</span>
+        </span>`;
+      }
+    }
+
+    function showToast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white transition-all ${
+        type === 'error' ? 'bg-rose-600' : (type === 'info' ? 'bg-slate-800' : 'bg-emerald-600')
+      }`;
+      toast.innerHTML = `<span>${msg}</span><button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white font-bold">&times;</button>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      render();
+      scheduleAutoPush();
+    }
+
+    function handleCreateDebt(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('input-name');
+      const qtyInput = document.getElementById('input-qty');
+      const priceInput = document.getElementById('input-price');
+      const noteInput = document.getElementById('input-note');
+
+      const name = nameInput.value.trim();
+      const qty = parseInt(qtyInput.value) || 1;
+      const price = parseInt(priceInput.value) || settings.defaultMealPrice;
+      const note = noteInput.value.trim();
+
+      if (!name) {
+        showToast('Vui lòng nhập tên khách hàng.', 'error');
+        return;
+      }
+
+      const now = new Date();
+      const isoStr = now.toISOString();
+      const displayDate = formatVNTime(now);
+      const amount = qty * price;
+
+      const newEntry = {
+        entryId: 'ENT_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        timestamp: isoStr,
+        displayDate: displayDate,
+        quantity: qty,
+        pricePerMeal: price,
+        amount: amount,
+        note: note || undefined
+      };
+
+      const normalized = normalizeVi(name);
+      const existingIdx = records.findIndex(r => r.normalizedName === normalized);
+
+      if (existingIdx >= 0) {
+        const existing = records[existingIdx];
+        const newTotal = (existing.status === 'settled' ? 0 : existing.totalDebt) + amount;
+        existing.name = name;
+        existing.totalDebt = newTotal;
+        existing.status = 'active';
+        existing.updatedAt = isoStr;
+        existing.history.unshift(newEntry);
+        records.splice(existingIdx, 1);
+        records.unshift(existing);
+      } else {
+        records.unshift({
+          id: 'KH_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          name: name,
+          normalizedName: normalized,
+          totalDebt: amount,
+          status: 'active',
+          createdAt: isoStr,
+          updatedAt: isoStr,
+          history: [newEntry]
+        });
+      }
+
+      saveState();
+      showToast(`Đã ghi nợ ${qty} suất (${formatVND(amount)}) cho "${name}".`);
+
+      nameInput.value = '';
+      qtyInput.value = '1';
+      noteInput.value = '';
+      updateTotalPreview();
+      nameInput.focus();
+    }
+
+    function handleSettle(id) {
+      const rec = records.find(r => r.id === id);
+      if (!rec) return;
+      if (confirm(`Xác nhận đã thu đủ ${formatVND(rec.totalDebt)} của "${rec.name}"?`)) {
+        rec.totalDebt = 0;
+        rec.status = 'settled';
+        rec.updatedAt = new Date().toISOString();
+        saveState();
+        showToast(`Đã xác nhận thanh toán nợ cho "${rec.name}".`);
+      }
+    }
+
+    function handleQuickAddFor(name) {
+      document.getElementById('input-name').value = name;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('input-qty').focus();
+    }
+
+    function adjustQty(delta) {
+      const inp = document.getElementById('input-qty');
+      inp.value = Math.max(1, (parseInt(inp.value) || 1) + delta);
+      updateTotalPreview();
+    }
+    function setQty(q) {
+      document.getElementById('input-qty').value = q;
+      updateTotalPreview();
+    }
+    function setPrice(p) {
+      document.getElementById('input-price').value = p;
+      updateTotalPreview();
+    }
+    function appendNote(n) {
+      const inp = document.getElementById('input-note');
+      inp.value = inp.value ? `${inp.value}, ${n}` : n;
+    }
+    function updateTotalPreview() {
+      const q = parseInt(document.getElementById('input-qty').value) || 1;
+      const p = parseInt(document.getElementById('input-price').value) || 0;
+      document.getElementById('preview-qty').innerText = q;
+      document.getElementById('preview-price').innerText = formatVND(p);
+      document.getElementById('preview-total').innerText = formatVND(q * p);
+    }
+
+    function setFilter(f) {
+      activeFilter = f;
+      document.getElementById('filter-active').className = f === 'active' ? 'flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-white text-rose-700 shadow-xs' : 'flex-1 py-2 px-2 text-xs font-semibold rounded-lg text-slate-600';
+      document.getElementById('filter-all').className = f === 'all' ? 'flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-white text-slate-900 shadow-xs' : 'flex-1 py-2 px-2 text-xs font-semibold rounded-lg text-slate-600';
+      document.getElementById('filter-settled').className = f === 'settled' ? 'flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-white text-emerald-700 shadow-xs' : 'flex-1 py-2 px-2 text-xs font-semibold rounded-lg text-slate-600';
+      render();
+    }
+
+    function handleSearch(val) {
+      searchQuery = val.trim();
+      render();
+    }
+
+    function handleOpenSheet() {
+      if (settings.googleSheetUrl) {
+        window.open(settings.googleSheetUrl, '_blank');
+      } else {
+        openSettingsModal();
+        showToast('Vui lòng dán Link Google Sheets của bạn vào đây.', 'info');
+      }
+    }
+
+    function openSettingsModal() {
+      document.getElementById('set-restaurant-name').value = settings.restaurantName;
+      document.getElementById('set-default-price').value = settings.defaultMealPrice;
+      document.getElementById('set-sheet-url').value = settings.googleSheetUrl || '';
+      document.getElementById('set-script-url').value = settings.appsScriptUrl || '';
+      document.getElementById('settings-modal').classList.remove('hidden');
+    }
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').classList.add('hidden');
+    }
+    function handleSaveSettings(e) {
+      e.preventDefault();
+      settings.restaurantName = document.getElementById('set-restaurant-name').value.trim() || 'Sổ Ghi Nợ Quán Cơm';
+      settings.defaultMealPrice = parseInt(document.getElementById('set-default-price').value) || 35000;
+      settings.googleSheetUrl = document.getElementById('set-sheet-url').value.trim();
+      settings.appsScriptUrl = document.getElementById('set-script-url').value.trim();
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      closeSettingsModal();
+      document.getElementById('header-title').innerText = settings.restaurantName;
+      showToast('Đã lưu cài đặt.');
+      triggerManualPull(true);
+    }
+
+    function render() {
+      let totalActiveDebt = 0, activeCount = 0, settledCount = 0, todayAmount = 0, todayMeals = 0;
+      records.forEach(r => {
+        const isSettled = r.status === 'settled' || r.totalDebt === 0;
+        if (isSettled) settledCount++;
+        else {
+          activeCount++;
+          totalActiveDebt += r.totalDebt;
+        }
+        (r.history || []).forEach(h => {
+          if (isToday(h.timestamp)) {
+            todayAmount += h.amount;
+            todayMeals += h.quantity;
+          }
+        });
+      });
+
+      document.getElementById('sum-total-debt').innerText = formatVND(totalActiveDebt);
+      document.getElementById('sum-active-debtors').innerText = `${activeCount} khách chưa trả`;
+      document.getElementById('sum-debtors-count').innerHTML = `${activeCount} <span class="text-xs font-normal">người</span>`;
+      document.getElementById('sum-settled-count').innerText = `${settledCount} đã trả xong`;
+      document.getElementById('sum-today-amount').innerText = formatVND(todayAmount);
+      document.getElementById('sum-today-meals').innerText = `${todayMeals} suất ghi nợ`;
+
+      document.getElementById('badge-active-count').innerText = activeCount;
+      document.getElementById('badge-all-count').innerText = records.length;
+      document.getElementById('badge-settled-count').innerText = settledCount;
+
+      let filtered = records;
+      if (activeFilter === 'active') filtered = records.filter(r => r.status === 'active' && r.totalDebt > 0);
+      else if (activeFilter === 'settled') filtered = records.filter(r => r.status === 'settled' || r.totalDebt === 0);
+
+      if (searchQuery) {
+        const normQ = normalizeVi(searchQuery);
+        filtered = filtered.filter(r => normalizeVi(r.name).includes(normQ) || (r.phone && r.phone.includes(searchQuery)));
+      }
+
+      const listEl = document.getElementById('debtors-list');
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-xs text-slate-400">
+          Chưa có khách hàng nào trong danh sách.
+        </div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(r => {
+        const isSettled = r.status === 'settled' || r.totalDebt === 0;
+        const lastEntry = r.history && r.history[0];
+        const lastDate = lastEntry ? (lastEntry.displayDate || formatVNTime(lastEntry.timestamp)) : formatVNTime(r.updatedAt);
+        const lastNote = lastEntry && lastEntry.note ? lastEntry.note : '';
+
+        return `
+          <div class="bg-white rounded-2xl border ${isSettled ? 'border-slate-200/80 opacity-80' : 'border-rose-200/90'} p-4 shadow-xs">
+            <div class="flex items-start justify-between gap-3 mb-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-base font-bold text-slate-900">${r.name}</span>
+                  ${isSettled 
+                    ? `<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Đã trả xong</span>`
+                    : `<span class="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-full">${r.history.length} lần nợ</span>`}
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Gần nhất: ${lastDate} ${lastNote ? `• <span class="text-slate-600">${lastNote}</span>` : ''}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-lg font-black ${isSettled ? 'text-emerald-600' : 'text-rose-600'}">${formatVND(r.totalDebt)}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+              ${!isSettled ? `
+                <button onclick="handleSettle('${r.id}')" class="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-1 active:scale-95 min-h-[40px]">
+                  ✓ Đã Thanh Toán
+                </button>
+              ` : ''}
+              <button onclick="handleQuickAddFor('${r.name}')" class="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 active:scale-95 min-h-[40px]">
+                + Ghi Thêm
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // KHỞI TẠO BAN ĐẦU
+    document.getElementById('header-title').innerText = settings.restaurantName;
+    document.getElementById('input-price').value = settings.defaultMealPrice;
+    updateTotalPreview();
+    render();
+    if (settings.appsScriptUrl) {
+      updateSyncBadge(settings.lastSyncedAt ? 'synced' : 'idle', settings.lastSyncedAt);
+      // Tự động tải dữ liệu từ Google Sheets về máy khi mở app (Fetch on load)
+      triggerManualPull(true);
+    }
+    lucide.createIcons();
+
+    // AUTO-POLLING: Cứ mỗi 60 giây (1 phút) tự động làm mới ngầm từ Google Sheets
+    setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine && settings.appsScriptUrl) {
+        triggerManualPull(true);
+      }
+    }, 60000);
+
+    // BẮT SỰ KIỆN MẠNG
+    window.addEventListener('online', () => {
+      showToast('Đã có mạng. Tự động đồng bộ 2 chiều với Google Sheets...');
+      triggerManualPull(true);
+    });
+    window.addEventListener('offline', () => {
+      updateSyncBadge('offline');
+      showToast('Mất mạng. Dữ liệu đang được lưu an toàn trên máy.', 'info');
+    });
+  </script>
+</body>
+</html>

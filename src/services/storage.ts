@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultMealPrice: 35000,
   phoneContact: '',
   currency: 'VNĐ',
+  appsScriptUrl: 'https://script.google.com/macros/s/AKfycbyPQVci49QP2rWDUHkTRbSnra4OawodYLezXA4zgbR5oLlZM6uqMun7Q1r-Mvk4u7og/exec',
+  autoSyncEnabled: true,
 };
 
 export const StorageEngine = {

@@ -55,6 +55,7 @@ describe('UI Components', () => {
     render(
       <Header
         settings={mockSettings}
+        syncStatus="synced"
         onOpenSettings={onOpenSettings}
         onOpenBackup={onOpenBackup}
         onOpenQuickAdd={onOpenQuickAdd}

@@ -25,11 +25,17 @@ export interface DebtorRecord {
   history: DebtHistoryEntry[]; // History entries
 }
 
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline' | 'unconfigured';
+
 export interface AppSettings {
   restaurantName: string;
   defaultMealPrice: number;
   phoneContact?: string;
   currency: string;
+  googleSheetUrl?: string;   // URL xem Google Sheets (https://docs.google.com/spreadsheets/d/...)
+  appsScriptUrl?: string;    // URL Google Apps Script Web App (https://script.google.com/macros/s/.../exec)
+  autoSyncEnabled?: boolean; // Bật/tắt tự động đồng bộ ngầm
+  lastSyncedAt?: string;     // Thời điểm đồng bộ thành công gần nhất
 }
 
 export interface CreateDebtInput {
@@ -62,6 +68,27 @@ export interface BackupPayload {
   app: string;
   settings: AppSettings;
   records: DebtorRecord[];
+}
+
+export interface GoogleSheetsSyncPayload {
+  app: string;
+  timestamp: string;
+  restaurantName: string;
+  records: DebtorRecord[];
+}
+
+export interface GoogleSheetsSyncResult {
+  success: boolean;
+  message: string;
+  syncedAt?: string;
+}
+
+export interface FetchCloudDataResult {
+  success: boolean;
+  records?: DebtorRecord[];
+  restaurantName?: string;
+  syncedAt?: string;
+  message: string;
 }
 
 export interface ValidationResult<T> {

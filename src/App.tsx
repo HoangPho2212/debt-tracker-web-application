@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DebtorRecord, AppSettings, CreateDebtInput, BackupPayload } from './types/contracts';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { DebtorRecord, AppSettings, CreateDebtInput, BackupPayload, SyncStatus } from './types/contracts';
 import { DebtFilterType, DebtorViewState } from './types/viewState';
 import { StorageEngine, DEFAULT_SETTINGS } from './services/storage';
 import { DebtManager } from './services/debtManager';
+import { GoogleSheetsSyncEngine } from './services/googleSheetsSync';
 import { Header } from './components/Header';
 import { SummaryCards } from './components/SummaryCards';
 import { QuickAddForm } from './components/QuickAddForm';
@@ -21,6 +22,14 @@ export const App: React.FC = () => {
   const [records, setRecords] = useState<DebtorRecord[]>(() => StorageEngine.loadRecords());
   const [settings, setSettings] = useState<AppSettings>(() => StorageEngine.loadSettings());
 
+  // Google Sheets Auto-Sync state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => {
+    if (!settings.appsScriptUrl) return 'unconfigured';
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
+    return settings.lastSyncedAt ? 'synced' : 'idle';
+  });
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | undefined>(settings.lastSyncedAt);
+
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<DebtFilterType>('active');
@@ -32,12 +41,17 @@ export const App: React.FC = () => {
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Auto persist records
+  // Ref to prevent initial mount sync loops
+  const isInitialMount = useRef(true);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isPullingRef = useRef(false);
+
+  // Auto persist records to LocalStorage
   useEffect(() => {
     StorageEngine.saveRecords(records);
   }, [records]);
 
-  // Auto persist settings
+  // Auto persist settings to LocalStorage
   useEffect(() => {
     StorageEngine.saveSettings(settings);
   }, [settings]);
@@ -56,6 +70,150 @@ export const App: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  // 1. PUSH: Gửi dữ liệu local lên Google Sheets
+  const triggerGoogleSheetsPush = useCallback(
+    async (targetRecords: DebtorRecord[] = records, targetSettings: AppSettings = settings) => {
+      if (!targetSettings.appsScriptUrl || !GoogleSheetsSyncEngine.isValidAppsScriptUrl(targetSettings.appsScriptUrl)) {
+        setSyncStatus('unconfigured');
+        return;
+      }
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setSyncStatus('offline');
+        return;
+      }
+
+      setSyncStatus('syncing');
+      const result = await GoogleSheetsSyncEngine.syncToGoogleSheets(targetRecords, targetSettings);
+
+      if (result.success) {
+        setSyncStatus('synced');
+        setLastSyncedAt(result.syncedAt);
+        setSettings((prev) => ({ ...prev, lastSyncedAt: result.syncedAt }));
+      } else {
+        setSyncStatus('error');
+      }
+    },
+    [records, settings]
+  );
+
+  // 2. PULL: Tải dữ liệu mới nhất từ Google Sheets về máy
+  const triggerGoogleSheetsPull = useCallback(
+    async (silent: boolean = false) => {
+      if (!settings.appsScriptUrl || !GoogleSheetsSyncEngine.isValidAppsScriptUrl(settings.appsScriptUrl)) {
+        if (!silent) setSyncStatus('unconfigured');
+        return;
+      }
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setSyncStatus('offline');
+        return;
+      }
+
+      if (isPullingRef.current) return;
+      isPullingRef.current = true;
+
+      if (!silent) setSyncStatus('syncing');
+
+      const result = await GoogleSheetsSyncEngine.fetchRecordsFromGoogleSheets(settings);
+      isPullingRef.current = false;
+
+      if (result.success && result.records) {
+        setRecords((prevLocal) => {
+          const merged = GoogleSheetsSyncEngine.mergeCloudAndLocalRecords(prevLocal, result.records!);
+          return merged;
+        });
+
+        if (result.restaurantName && result.restaurantName !== settings.restaurantName) {
+          setSettings((prev) => ({ ...prev, restaurantName: result.restaurantName! }));
+        }
+
+        setSyncStatus('synced');
+        setLastSyncedAt(result.syncedAt);
+        setSettings((prev) => ({ ...prev, lastSyncedAt: result.syncedAt }));
+
+        if (!silent) {
+          showToast(`Đã đồng bộ dữ liệu mới nhất từ Google Sheets (${result.records.length} khách hàng).`, 'success');
+        }
+      } else if (!silent) {
+        setSyncStatus('error');
+        showToast(result.message, 'error');
+      }
+    },
+    [settings, showToast]
+  );
+
+  // FETCH ON LOAD: Khi vừa mở app, tự động kéo dữ liệu từ Google Sheets về máy
+  useEffect(() => {
+    if (settings.appsScriptUrl) {
+      triggerGoogleSheetsPull(true);
+    }
+  }, []); // Run once on load
+
+  // AUTO-POLLING: Cứ sau mỗi 60 giây (1 phút), tự động tải ngầm dữ liệu để khớp giữa các máy
+  useEffect(() => {
+    if (!settings.appsScriptUrl) return;
+
+    const pollingInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
+        triggerGoogleSheetsPull(true);
+      }
+    }, 60000); // 60s auto refresh
+
+    return () => clearInterval(pollingInterval);
+  }, [settings.appsScriptUrl, triggerGoogleSheetsPull]);
+
+  // AUTO-PUSH: Khi người dùng thao tác thay đổi records tại local, tự động đẩy lên Google Sheets (debounce 1.2s)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (!settings.appsScriptUrl) {
+      setSyncStatus('unconfigured');
+      return;
+    }
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    setSyncStatus('syncing');
+    syncTimeoutRef.current = setTimeout(() => {
+      triggerGoogleSheetsPush(records, settings);
+    }, 1200);
+
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, [records, settings.appsScriptUrl, triggerGoogleSheetsPush]);
+
+  // ONLINE / OFFLINE LISTENERS
+  useEffect(() => {
+    const handleOnline = () => {
+      if (settings.appsScriptUrl) {
+        showToast('Đã có mạng trở lại. Đang tự động đồng bộ 2 chiều với Google Sheets...', 'info');
+        triggerGoogleSheetsPull(true);
+      }
+    };
+
+    const handleOffline = () => {
+      setSyncStatus('offline');
+      showToast('Đã mất kết nối mạng. Dữ liệu đang được lưu tạm trên máy (LocalStorage).', 'info');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [settings.appsScriptUrl, triggerGoogleSheetsPull, showToast]);
+
   // Projection ViewState
   const viewState = useMemo(() => {
     return DebtManager.buildAppViewState(
@@ -66,7 +224,9 @@ export const App: React.FC = () => {
       selectedDebtorId || undefined,
       isQuickAddOpen,
       isSettingsOpen,
-      isBackupRestoreOpen
+      isBackupRestoreOpen,
+      syncStatus,
+      lastSyncedAt
     );
   }, [
     records,
@@ -77,6 +237,8 @@ export const App: React.FC = () => {
     isQuickAddOpen,
     isSettingsOpen,
     isBackupRestoreOpen,
+    syncStatus,
+    lastSyncedAt,
   ]);
 
   // Actions
@@ -125,7 +287,10 @@ export const App: React.FC = () => {
 
   const handleSaveSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
-    showToast('Đã lưu thông tin cài đặt quán.', 'success');
+    showToast('Đã lưu thông tin cài đặt quán & Google Sheets.', 'success');
+    if (newSettings.appsScriptUrl) {
+      triggerGoogleSheetsPush(records, newSettings);
+    }
   };
 
   const handleImportBackup = (payload: BackupPayload) => {
@@ -146,17 +311,30 @@ export const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleManualRefreshClick = () => {
+    if (!settings.appsScriptUrl) {
+      setIsSettingsOpen(true);
+      showToast('Vui lòng nhập Google Apps Script URL trước khi làm mới.', 'info');
+      return;
+    }
+    showToast('Đang tải dữ liệu mới nhất từ Google Sheets...', 'info');
+    triggerGoogleSheetsPull(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Header */}
+      {/* Header with Google Sheets Viewer, Refresh & Sync Status */}
       <Header
         settings={settings}
+        syncStatus={syncStatus}
+        lastSyncedAt={lastSyncedAt}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBackup={() => setIsBackupRestoreOpen(true)}
         onOpenQuickAdd={() => setIsQuickAddOpen((prev) => !prev)}
+        onManualSync={handleManualRefreshClick}
         isQuickAddOpen={isQuickAddOpen}
       />
 
@@ -265,6 +443,8 @@ export const App: React.FC = () => {
           settings={settings}
           onSave={handleSaveSettings}
           onClose={() => setIsSettingsOpen(false)}
+          onManualSync={handleManualRefreshClick}
+          isSyncing={syncStatus === 'syncing'}
         />
       )}
 

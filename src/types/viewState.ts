@@ -1,4 +1,4 @@
-import { DebtHistoryEntry, AppSettings } from './contracts';
+import { DebtHistoryEntry, AppSettings, SyncStatus } from './contracts';
 
 export interface DebtorViewState {
   id: string;
@@ -37,4 +37,6 @@ export interface AppViewState {
   isQuickAddOpen: boolean;
   isSettingsOpen: boolean;
   isBackupRestoreOpen: boolean;
+  syncStatus: SyncStatus;
+  lastSyncedAt?: string;
 }
