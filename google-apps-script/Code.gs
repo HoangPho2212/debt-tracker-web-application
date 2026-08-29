@@ -176,16 +176,22 @@ function doGet(e) {
 
     if (dataSheet) {
       var rawJson = dataSheet.getRange(1, 1).getValue();
-      if (rawJson) {
-        var parsed = JSON.parse(rawJson);
-        return ContentService.createTextOutput(
-          JSON.stringify({
-            status: "success",
-            restaurantName: parsed.restaurantName || "Sổ Ghi Nợ Quán Cơm",
-            records: parsed.records || [],
-            syncedAt: parsed.syncedAt || new Date().toISOString()
-          })
-        ).setMimeType(ContentService.MimeType.JSON);
+      if (rawJson && typeof rawJson === "string" && rawJson.trim().startsWith("{")) {
+        try {
+          var parsed = JSON.parse(rawJson);
+          if (parsed && Array.isArray(parsed.records)) {
+            return ContentService.createTextOutput(
+              JSON.stringify({
+                status: "success",
+                restaurantName: parsed.restaurantName || "Sổ Ghi Nợ Quán Cơm",
+                records: parsed.records || [],
+                syncedAt: parsed.syncedAt || new Date().toISOString()
+              })
+            ).setMimeType(ContentService.MimeType.JSON);
+          }
+        } catch (jsonErr) {
+          // Fallback to reading the visible sheet
+        }
       }
     }
 

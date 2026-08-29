@@ -90,7 +90,7 @@ export const GoogleSheetsSyncEngine = {
   },
 
   /**
-   * PULL: Fetches latest cloud records from Google Sheets (via doGet)
+   * PULL: Fetches latest cloud records from Google Sheets (via doGet) with robust multi-format parsing
    */
   async fetchRecordsFromGoogleSheets(
     settings: AppSettings
@@ -105,7 +105,7 @@ export const GoogleSheetsSyncEngine = {
     if (!settings.appsScriptUrl || !this.isValidAppsScriptUrl(settings.appsScriptUrl)) {
       return {
         success: false,
-        message: 'Chưa cấu hình Google Apps Script URL.',
+        message: 'Chưa cấu hình Google Apps Script URL (/exec).',
       };
     }
 
@@ -114,7 +114,7 @@ export const GoogleSheetsSyncEngine = {
       const response = await fetch(targetUrl, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          'Accept': 'application/json, text/plain, */*',
         },
       });
 
@@ -122,20 +122,76 @@ export const GoogleSheetsSyncEngine = {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json();
+      let data: any;
+      if (typeof response.json === 'function') {
+        try {
+          data = await response.json();
+        } catch (jsonErr) {
+          if (typeof response.text === 'function') {
+            const rawText = await response.text();
+            if (rawText.trim().startsWith('<') || rawText.includes('<html')) {
+              return {
+                success: false,
+                message: 'URL Apps Script không đúng (đang trỏ tới trang web HTML thay vì Web App /exec).',
+              };
+            }
+            data = JSON.parse(rawText);
+          } else {
+            throw jsonErr;
+          }
+        }
+      } else if (typeof response.text === 'function') {
+        const rawText = await response.text();
+        if (rawText.trim().startsWith('<') || rawText.includes('<html')) {
+          return {
+            success: false,
+            message: 'URL Apps Script không đúng (đang trỏ tới trang web HTML thay vì Web App /exec).',
+          };
+        }
+        data = JSON.parse(rawText);
+      }
+
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          // keep as is
+        }
+      }
+
+      if (data && data.status === 'error') {
+        return {
+          success: false,
+          message: `Google Sheets báo lỗi: ${data.message || 'Không rõ nguyên nhân'}`,
+        };
+      }
+
+      let parsedRecords: DebtorRecord[] | null = null;
       if (data && Array.isArray(data.records)) {
+        parsedRecords = data.records;
+      } else if (Array.isArray(data)) {
+        parsedRecords = data;
+      } else if (data && typeof data.records === 'string') {
+        try {
+          parsedRecords = JSON.parse(data.records);
+        } catch {
+          // ignore
+        }
+      }
+
+      if (parsedRecords && Array.isArray(parsedRecords)) {
         return {
           success: true,
-          records: data.records as DebtorRecord[],
-          restaurantName: data.restaurantName,
-          syncedAt: data.syncedAt || new Date().toISOString(),
-          message: `Đã tải ${data.records.length} khách hàng từ Google Sheets.`,
+          records: parsedRecords,
+          restaurantName: data?.restaurantName,
+          syncedAt: data?.syncedAt || new Date().toISOString(),
+          message: `Đã tải ${parsedRecords.length} khách hàng từ Google Sheets.`,
         };
       }
 
       return {
         success: false,
-        message: 'Dữ liệu từ Google Sheets không đúng định dạng.',
+        message: 'Dữ liệu từ Google Sheets không đúng định dạng danh sách nợ.',
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Lỗi kết nối';
