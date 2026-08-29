@@ -79,51 +79,53 @@
 
   <!-- HEADER -->
   <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 px-3 sm:px-4 py-2.5 shadow-xs">
-    <div class="max-w-xl mx-auto flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 min-w-0">
-        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm shadow-orange-500/20 flex-shrink-0 font-bold">
+    <div class="max-w-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-2">
+      <!-- TẦNG 1: TÊN QUÁN CƠM & TRẠNG THÁI -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm shadow-orange-500/25 flex-shrink-0 font-bold text-lg">
           🍚
         </div>
         <div class="min-w-0">
-          <h1 id="header-title" class="text-sm sm:text-base font-bold text-slate-900 leading-tight truncate">
+          <h1 id="header-title" class="text-base sm:text-lg font-black text-slate-900 leading-tight tracking-tight">
             Sổ Ghi Nợ Quán Cơm
           </h1>
           <div class="flex items-center gap-1.5 mt-0.5" id="sync-status-badge">
-            <span class="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 cursor-pointer" onclick="openSettingsModal()">
+            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 cursor-pointer" onclick="openSettingsModal()">
               <span>📊 Chưa kết nối Sheets</span>
             </span>
           </div>
         </div>
       </div>
 
-      <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+      <!-- TẦNG 2: THANH NÚT CHỨC NĂNG RỘNG RÃI -->
+      <div class="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
         <!-- Nút Xem trong Trang tính -->
-        <button id="btn-view-sheet" onclick="handleOpenSheet()" class="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 min-h-[40px] shadow-xs border bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300">
+        <button id="btn-view-sheet" onclick="handleOpenSheet()" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[42px] shadow-xs border bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 cursor-pointer">
           <div class="w-5 h-5 rounded-md bg-[#0F9D58] flex items-center justify-center text-white text-[11px] font-bold">
             田
           </div>
-          <span class="hidden xs:inline">Trang Tính</span>
+          <span class="font-bold">Trang Tính</span>
           <i data-lucide="external-link" class="w-3 h-3 text-emerald-700/70"></i>
         </button>
 
         <!-- Nút Làm Mới / Đồng Bộ 2 Chiều -->
-        <button id="btn-refresh" onclick="triggerManualPull()" class="p-2 rounded-xl text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Tải dữ liệu mới nhất từ Google Sheets">
+        <button id="btn-refresh" onclick="triggerManualPull()" class="p-2.5 sm:px-3 rounded-xl text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 active:scale-95 transition-all min-w-[42px] min-h-[42px] flex items-center justify-center border border-slate-200 bg-slate-50 cursor-pointer" title="Tải dữ liệu mới nhất từ Google Sheets">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i>
         </button>
 
         <!-- Nút Ghi Nợ -->
-        <button onclick="toggleQuickAdd()" class="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/30">
+        <button onclick="toggleQuickAdd()" class="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 min-h-[42px] bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/30 cursor-pointer">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span class="hidden sm:inline">Ghi Nợ</span>
+          <span>Ghi Nợ</span>
         </button>
 
         <!-- Nút Cài Đặt -->
-        <button onclick="openSettingsModal()" class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Cài đặt">
+        <button onclick="openSettingsModal()" class="p-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:scale-95 transition-all min-w-[42px] min-h-[42px] flex items-center justify-center border border-slate-200 bg-slate-50 cursor-pointer" title="Cài đặt quán & Sheets">
           <i data-lucide="settings" class="w-4 h-4"></i>
         </button>
 
         <!-- Nút Khóa Ứng Dụng -->
-        <button onclick="handleLockApp()" class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition-all min-w-[40px] min-h-[40px] flex items-center justify-center border border-slate-200" title="Khóa ứng dụng">
+        <button onclick="handleLockApp()" class="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-95 transition-all min-w-[42px] min-h-[42px] flex items-center justify-center border border-slate-200 bg-slate-50 cursor-pointer" title="Khóa ứng dụng">
           <i data-lucide="lock" class="w-4 h-4"></i>
         </button>
       </div>
