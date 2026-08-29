@@ -205,6 +205,28 @@
           </div>
         </div>
 
+        <!-- Customizable Time Selection (Cho phép chỉnh thời gian nợ) -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <span>🕒 Thời điểm nợ</span>
+            </label>
+            <span id="time-badge" class="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Bây giờ</span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-1">
+            <button type="button" id="time-btn-now" onclick="setTimeMode('now')" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-emerald-600 text-white border-emerald-600 shadow-xs">Bây giờ</button>
+            <button type="button" id="time-btn-lunch" onclick="setTimeMode('lunch_today')" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">Trưa nay</button>
+            <button type="button" id="time-btn-yesterday" onclick="setTimeMode('yesterday_lunch')" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">Hôm qua</button>
+            <button type="button" id="time-btn-custom" onclick="setTimeMode('custom')" class="py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200">📅 Tùy chọn</button>
+          </div>
+
+          <div id="custom-datetime-container" class="hidden mt-2 p-2.5 bg-slate-50 border border-slate-300 rounded-xl space-y-1">
+            <label class="block text-[11px] font-semibold text-slate-600">Chọn ngày & giờ nợ:</label>
+            <input id="input-custom-datetime" type="datetime-local" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900" />
+          </div>
+        </div>
+
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ghi chú món ăn (tùy chọn)</label>
           <input id="input-note" type="text" placeholder="VD: Cơm sườn, Thêm trứng..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[40px]" />
@@ -221,7 +243,7 @@
             <span>Thành tiền (<span id="preview-qty">1</span> suất × <span id="preview-price">35.000 đ</span>):</span>
             <span id="preview-total" class="text-base font-black text-rose-600">35.000 đ</span>
           </div>
-          <button type="submit" class="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+          <button type="submit" class="w-full min-h-[48px] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer">
             <i data-lucide="check" class="w-5 h-5"></i>
             <span>+ GHI NỢ NGAY</span>
           </button>
@@ -558,6 +580,37 @@
       scheduleAutoPush();
     }
 
+    let currentTimeMode = 'now';
+
+    function setTimeMode(mode) {
+      currentTimeMode = mode;
+      const btnNow = document.getElementById('time-btn-now');
+      const btnLunch = document.getElementById('time-btn-lunch');
+      const btnYest = document.getElementById('time-btn-yesterday');
+      const btnCustom = document.getElementById('time-btn-custom');
+      const containerCustom = document.getElementById('custom-datetime-container');
+      const badge = document.getElementById('time-badge');
+
+      const activeClass = 'py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-emerald-600 text-white border-emerald-600 shadow-xs';
+      const inactiveClass = 'py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200';
+
+      btnNow.className = mode === 'now' ? activeClass : inactiveClass;
+      btnLunch.className = mode === 'lunch_today' ? activeClass : inactiveClass;
+      btnYest.className = mode === 'yesterday_lunch' ? activeClass : inactiveClass;
+      btnCustom.className = mode === 'custom' ? activeClass : inactiveClass;
+
+      if (mode === 'custom') {
+        containerCustom.classList.remove('hidden');
+        badge.innerText = 'Tùy chọn';
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        document.getElementById('input-custom-datetime').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      } else {
+        containerCustom.classList.add('hidden');
+        badge.innerText = mode === 'now' ? 'Bây giờ' : (mode === 'lunch_today' ? 'Trưa nay 11:30' : 'Hôm qua 12:00');
+      }
+    }
+
     function handleCreateDebt(e) {
       e.preventDefault();
       const nameInput = document.getElementById('input-name');
@@ -575,9 +628,22 @@
         return;
       }
 
-      const now = new Date();
-      const isoStr = now.toISOString();
-      const displayDate = formatVNTime(now);
+      let entryDate = new Date();
+      if (currentTimeMode === 'lunch_today') {
+        entryDate.setHours(11, 30, 0, 0);
+      } else if (currentTimeMode === 'yesterday_lunch') {
+        entryDate.setDate(entryDate.getDate() - 1);
+        entryDate.setHours(12, 0, 0, 0);
+      } else if (currentTimeMode === 'custom') {
+        const val = document.getElementById('input-custom-datetime').value;
+        if (val) {
+          const parsed = new Date(val);
+          if (!isNaN(parsed.getTime())) entryDate = parsed;
+        }
+      }
+
+      const isoStr = entryDate.toISOString();
+      const displayDate = formatVNTime(entryDate);
       const amount = qty * price;
 
       const newEntry = {
@@ -599,8 +665,9 @@
         existing.name = name;
         existing.totalDebt = newTotal;
         existing.status = 'active';
-        existing.updatedAt = isoStr;
+        existing.updatedAt = new Date().toISOString();
         existing.history.unshift(newEntry);
+        existing.history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         records.splice(existingIdx, 1);
         records.unshift(existing);
       } else {
@@ -611,7 +678,7 @@
           totalDebt: amount,
           status: 'active',
           createdAt: isoStr,
-          updatedAt: isoStr,
+          updatedAt: new Date().toISOString(),
           history: [newEntry]
         });
       }
@@ -622,6 +689,7 @@
       nameInput.value = '';
       qtyInput.value = '1';
       noteInput.value = '';
+      setTimeMode('now');
       updateTotalPreview();
       nameInput.focus();
     }

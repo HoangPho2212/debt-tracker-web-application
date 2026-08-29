@@ -304,6 +304,19 @@ export const App: React.FC = () => {
     setRecords(updated);
   };
 
+  const handleUpdateHistoryEntry = (
+    debtorId: string,
+    entryId: string,
+    updates: { timestamp?: string; quantity?: number; pricePerMeal?: number; note?: string }
+  ) => {
+    const updated = DebtManager.updateHistoryEntry(records, {
+      debtorId,
+      entryId,
+      ...updates,
+    });
+    setRecords(updated);
+  };
+
   const handleUpdateDebtorInfo = (debtorId: string, name: string, phone?: string) => {
     const updated = DebtManager.updateDebtor(records, debtorId, name, phone);
     setRecords(updated);
@@ -470,6 +483,7 @@ export const App: React.FC = () => {
           onClose={() => setSelectedDebtorId(null)}
           onSettle={handleSettleDebtor}
           onDeleteEntry={handleDeleteHistoryEntry}
+          onUpdateEntry={handleUpdateHistoryEntry}
           onUpdateInfo={handleUpdateDebtorInfo}
           onDeleteDebtor={handleDeleteDebtor}
           onShowToast={showToast}

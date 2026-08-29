@@ -191,4 +191,61 @@ describe('DebtManager Business Logic', () => {
     expect(viewState.summary.todayRecordedAmount).toBe(70000);
     expect(viewState.summary.todayMealsCount).toBe(2);
   });
+
+  it('should support custom timestamp when logging debt', () => {
+    const initialRecords: DebtorRecord[] = [];
+    const customTime = '2026-08-25T11:30:00.000Z';
+    const input = {
+      name: 'Anh Tuấn',
+      quantity: 1,
+      pricePerMeal: 35000,
+      customTimestamp: customTime,
+    };
+
+    const { updatedRecords, affectedRecord } = DebtManager.addDebtEntry(initialRecords, input);
+    expect(updatedRecords).toHaveLength(1);
+    expect(affectedRecord.history[0].timestamp).toBe(customTime);
+    expect(affectedRecord.history[0].displayDate).toContain('25/08/2026');
+  });
+
+  it('should update an existing history entry and recalculate total debt', () => {
+    const initialRecords: DebtorRecord[] = [
+      {
+        id: 'KH_1',
+        name: 'Anh Tuấn',
+        normalizedName: 'anh tuan',
+        totalDebt: 35000,
+        status: 'active',
+        createdAt: '2026-08-28T10:00:00.000Z',
+        updatedAt: '2026-08-28T10:00:00.000Z',
+        history: [
+          {
+            entryId: 'ENT_1',
+            timestamp: '2026-08-28T10:00:00.000Z',
+            displayDate: '10:00 28/08/2026',
+            quantity: 1,
+            pricePerMeal: 35000,
+            amount: 35000,
+            note: 'Cơm sườn',
+          },
+        ],
+      },
+    ];
+
+    const updated = DebtManager.updateHistoryEntry(initialRecords, {
+      debtorId: 'KH_1',
+      entryId: 'ENT_1',
+      quantity: 3,
+      pricePerMeal: 40000,
+      note: 'Cơm gà xối mỡ',
+      timestamp: '2026-08-27T12:00:00.000Z',
+    });
+
+    expect(updated[0].totalDebt).toBe(120000); // 3 * 40k
+    expect(updated[0].history[0].quantity).toBe(3);
+    expect(updated[0].history[0].pricePerMeal).toBe(40000);
+    expect(updated[0].history[0].amount).toBe(120000);
+    expect(updated[0].history[0].note).toBe('Cơm gà xối mỡ');
+    expect(updated[0].history[0].displayDate).toContain('27/08/2026');
+  });
 });

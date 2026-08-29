@@ -44,6 +44,7 @@ export interface CreateDebtInput {
   pricePerMeal: number;
   note?: string;
   phone?: string;
+  customTimestamp?: string; // ISO string or datetime-local format
 }
 
 export interface SettleDebtInput {
@@ -60,6 +61,15 @@ export interface UpdateDebtorInput {
 export interface DeleteHistoryEntryInput {
   debtorId: string;
   entryId: string;
+}
+
+export interface UpdateHistoryEntryInput {
+  debtorId: string;
+  entryId: string;
+  timestamp?: string;
+  quantity?: number;
+  pricePerMeal?: number;
+  note?: string;
 }
 
 export interface BackupPayload {

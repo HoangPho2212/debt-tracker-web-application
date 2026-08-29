@@ -2,6 +2,7 @@ import {
   DebtorRecord,
   DebtHistoryEntry,
   CreateDebtInput,
+  UpdateHistoryEntryInput,
   AppSettings,
 } from '../types/contracts';
 import {
@@ -29,9 +30,16 @@ export const DebtManager = {
   ): { updatedRecords: DebtorRecord[]; affectedRecord: DebtorRecord } {
     const validated = CreateDebtContract.execute(rawInput);
 
-    const now = new Date();
-    const isoTimestamp = now.toISOString();
-    const displayDate = formatVietnameseDateTime(now);
+    let entryDate = new Date();
+    if (rawInput.customTimestamp) {
+      const parsed = new Date(rawInput.customTimestamp);
+      if (!isNaN(parsed.getTime())) {
+        entryDate = parsed;
+      }
+    }
+
+    const isoTimestamp = entryDate.toISOString();
+    const displayDate = formatVietnameseDateTime(entryDate);
     const amount = validated.quantity * validated.pricePerMeal;
 
     const newEntry: DebtHistoryEntry = {
@@ -54,20 +62,21 @@ export const DebtManager = {
 
     if (existingIndex >= 0) {
       const existing = records[existingIndex];
-      const updatedHistory = [newEntry, ...existing.history];
+      const updatedHistory = [newEntry, ...existing.history].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
       const newTotalDebt = (existing.status === 'settled' ? 0 : existing.totalDebt) + amount;
 
       affectedRecord = {
         ...existing,
-        name: validated.name, // Keep latest casing
+        name: validated.name,
         phone: validated.phone || existing.phone,
         totalDebt: newTotalDebt,
         status: 'active',
-        updatedAt: isoTimestamp,
+        updatedAt: new Date().toISOString(),
         history: updatedHistory,
       };
 
-      // Move updated customer to top of the list
       updatedRecords.splice(existingIndex, 1);
       updatedRecords.unshift(affectedRecord);
     } else {
@@ -79,7 +88,7 @@ export const DebtManager = {
         totalDebt: amount,
         status: 'active',
         createdAt: isoTimestamp,
-        updatedAt: isoTimestamp,
+        updatedAt: new Date().toISOString(),
         history: [newEntry],
       };
 
@@ -106,7 +115,7 @@ export const DebtManager = {
   },
 
   /**
-   * Deletes a specific history entry and recalculates total debt
+   * Deletes a single history entry and recalibrates remaining debt
    */
   deleteHistoryEntry(
     records: DebtorRecord[],
@@ -117,15 +126,71 @@ export const DebtManager = {
     return records.map((record) => {
       if (record.id !== debtorId) return record;
 
-      const updatedHistory = record.history.filter((h) => h.entryId !== entryId);
-      const newTotalDebt = updatedHistory.reduce((sum, h) => sum + h.amount, 0);
+      const targetEntry = record.history.find((e) => e.entryId === entryId);
+      if (!targetEntry) return record;
+
+      const updatedHistory = record.history.filter((e) => e.entryId !== entryId);
+      const deductedDebt = Math.max(0, record.totalDebt - targetEntry.amount);
+      const newStatus = deductedDebt === 0 && updatedHistory.length === 0 ? 'settled' : record.status;
 
       return {
         ...record,
-        history: updatedHistory,
-        totalDebt: record.status === 'settled' ? 0 : newTotalDebt,
-        status: newTotalDebt === 0 ? 'settled' : record.status,
+        totalDebt: deductedDebt,
+        status: newStatus,
         updatedAt: now,
+        history: updatedHistory,
+      };
+    });
+  },
+
+  /**
+   * Updates an existing history entry (timestamp, quantity, price, note)
+   */
+  updateHistoryEntry(
+    records: DebtorRecord[],
+    input: UpdateHistoryEntryInput
+  ): DebtorRecord[] {
+    const now = new Date().toISOString();
+    return records.map((record) => {
+      if (record.id !== input.debtorId) return record;
+
+      const updatedHistory = record.history.map((entry) => {
+        if (entry.entryId !== input.entryId) return entry;
+
+        let entryDate = new Date(entry.timestamp);
+        if (input.timestamp) {
+          const parsed = new Date(input.timestamp);
+          if (!isNaN(parsed.getTime())) {
+            entryDate = parsed;
+          }
+        }
+
+        const quantity = input.quantity !== undefined ? Math.max(1, Number(input.quantity)) : entry.quantity;
+        const pricePerMeal = input.pricePerMeal !== undefined ? Math.max(0, Number(input.pricePerMeal)) : entry.pricePerMeal;
+        const amount = quantity * pricePerMeal;
+
+        return {
+          ...entry,
+          timestamp: entryDate.toISOString(),
+          displayDate: formatVietnameseDateTime(entryDate),
+          quantity,
+          pricePerMeal,
+          amount,
+          note: input.note !== undefined ? (input.note.trim() || undefined) : entry.note,
+        };
+      });
+
+      updatedHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      const newTotalDebt = record.status === 'settled'
+        ? 0
+        : updatedHistory.reduce((sum, h) => sum + h.amount, 0);
+
+      return {
+        ...record,
+        totalDebt: newTotalDebt,
+        updatedAt: now,
+        history: updatedHistory,
       };
     });
   },

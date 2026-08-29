@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Minus, Check, User, DollarSign, FileText, Phone, } from 'lucide-react';
+import { Plus, Minus, Check, DollarSign, FileText, Phone, Clock, Calendar } from 'lucide-react';
 import { CreateDebtInput, DebtorRecord, AppSettings } from '../types/contracts';
 import { formatCurrency } from '../utils/formatters';
 import { CreateDebtContract } from '../contracts/debtContract';
@@ -28,6 +28,14 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
   const [phone, setPhone] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Time customization state
+  const [timeMode, setTimeMode] = useState<'now' | 'lunch_today' | 'yesterday_lunch' | 'custom'>('now');
+  const [customDateTime, setCustomDateTime] = useState<string>(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  });
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +70,30 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
     setQuantity((prev) => Math.max(1, prev + delta));
   };
 
+  const computeFinalTimestamp = (): string | undefined => {
+    if (timeMode === 'now') return undefined;
+
+    const now = new Date();
+    if (timeMode === 'lunch_today') {
+      const lunch = new Date(now);
+      lunch.setHours(11, 30, 0, 0);
+      return lunch.toISOString();
+    }
+    if (timeMode === 'yesterday_lunch') {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(12, 0, 0, 0);
+      return yesterday.toISOString();
+    }
+    if (timeMode === 'custom' && customDateTime) {
+      const parsed = new Date(customDateTime);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+    return undefined;
+  };
+
   const totalAmount = quantity * pricePerMeal;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,6 +106,7 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
       pricePerMeal,
       note: note.trim() || undefined,
       phone: phone.trim() || undefined,
+      customTimestamp: computeFinalTimestamp(),
     };
 
     const validation = CreateDebtContract.validate(inputData);
@@ -83,11 +116,13 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
     }
 
     onSubmit(validation.sanitized!);
-    // Reset form for next fast entry
+
+    // Reset form for next entry
     setName('');
     setQuantity(1);
     setNote('');
     setPhone('');
+    setTimeMode('now');
     setErrorMsg(null);
     if (inputRef.current) {
       inputRef.current.focus();
@@ -124,12 +159,10 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
             Tên khách hàng <span className="text-rose-500">*</span>
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <User className="w-4 h-4" />
-            </div>
             <input
               ref={inputRef}
               type="text"
+              required
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -137,24 +170,24 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
               }}
               onFocus={() => setShowSuggestions(true)}
               placeholder="VD: Anh Tuấn Viettel, Chị Lan..."
-              className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent min-h-[44px]"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
               autoComplete="off"
             />
           </div>
 
           {/* Autocomplete Dropdown */}
           {showSuggestions && filteredSuggestions.length > 0 && (
-            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden divide-y divide-slate-100">
-              {filteredSuggestions.map((sug) => (
+            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+              {filteredSuggestions.map((record) => (
                 <button
-                  key={sug.id}
+                  key={record.id}
                   type="button"
-                  onClick={() => handleSelectSuggestion(sug)}
-                  className="w-full px-3 py-2 text-left text-xs font-medium text-slate-800 hover:bg-emerald-50 flex items-center justify-between"
+                  onClick={() => handleSelectSuggestion(record)}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 flex items-center justify-between border-b border-slate-50 last:border-none"
                 >
-                  <span className="font-semibold">{sug.name}</span>
-                  <span className="text-slate-500">
-                    {sug.totalDebt > 0 ? `Đang nợ: ${formatCurrency(sug.totalDebt)}` : 'Đã hết nợ'}
+                  <span className="font-semibold text-slate-800">{record.name}</span>
+                  <span className="text-[11px] text-rose-600 font-bold">
+                    Đang nợ: {formatCurrency(record.totalDebt)}
                   </span>
                 </button>
               ))}
@@ -162,9 +195,9 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
           )}
         </div>
 
-        {/* Quantity & Unit Price Row */}
+        {/* Quantity & Unit Price */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Quantity Selector */}
+          {/* Quantity */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Số lượng suất
@@ -173,7 +206,7 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
               <button
                 type="button"
                 onClick={() => handleQuantityChange(-1)}
-                className="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 active:bg-slate-300 transition-colors"
+                className="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 active:bg-slate-300 text-lg font-bold"
                 aria-label="Giảm 1 suất"
               >
                 <Minus className="w-4 h-4" />
@@ -183,20 +216,20 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
                 min="1"
                 max="1000"
                 value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
                 className="w-full text-center font-bold text-base text-slate-900 bg-transparent focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => handleQuantityChange(1)}
-                className="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 active:bg-slate-300 transition-colors"
+                className="w-11 h-11 flex items-center justify-center text-slate-700 hover:bg-slate-200 active:bg-slate-300 text-lg font-bold"
                 aria-label="Tăng 1 suất"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Quick Quantity Presets */}
+            {/* Quick Quantity Chips */}
             <div className="flex gap-1 mt-1.5">
               {[1, 2, 3, 5].map((q) => (
                 <button
@@ -218,22 +251,23 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
           {/* Unit Price */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Đơn giá / suất (đ)
+              Đơn giá / suất
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                <DollarSign className="w-3.5 h-3.5" />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <DollarSign className="w-4 h-4" />
               </div>
               <input
                 type="number"
                 step="1000"
                 min="0"
                 value={pricePerMeal}
-                onChange={(e) => setPricePerMeal(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-full pl-7 pr-2.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
+                onChange={(e) => setPricePerMeal(Math.max(0, Number(e.target.value) || 0))}
+                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px]"
               />
             </div>
-            {/* Quick Price Presets */}
+
+            {/* Quick Price Chips */}
             <div className="flex gap-1 mt-1.5">
               {[30000, 35000, 40000, 50000].map((p) => (
                 <button
@@ -251,6 +285,86 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Customizable Time Selection (Cho phép chỉnh thời gian nợ) */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <span>Thời điểm nợ</span>
+            </label>
+            {timeMode !== 'now' && (
+              <span className="text-[11px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                {timeMode === 'lunch_today' && 'Trưa nay 11:30'}
+                {timeMode === 'yesterday_lunch' && 'Trưa hôm qua 12:00'}
+                {timeMode === 'custom' && 'Thời gian tùy chọn'}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              type="button"
+              onClick={() => setTimeMode('now')}
+              className={`py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all truncate text-center ${
+                timeMode === 'now'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Bây giờ
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeMode('lunch_today')}
+              className={`py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all truncate text-center ${
+                timeMode === 'lunch_today'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Trưa nay
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeMode('yesterday_lunch')}
+              className={`py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all truncate text-center ${
+                timeMode === 'yesterday_lunch'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Hôm qua
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeMode('custom')}
+              className={`py-1.5 px-1 rounded-xl text-[11px] font-semibold border transition-all truncate text-center flex items-center justify-center gap-1 ${
+                timeMode === 'custom'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Calendar className="w-3 h-3" />
+              <span>Tùy chọn</span>
+            </button>
+          </div>
+
+          {/* Custom Date & Time Picker */}
+          {timeMode === 'custom' && (
+            <div className="mt-2 p-2.5 bg-slate-50 border border-slate-300 rounded-xl space-y-1">
+              <label className="block text-[11px] font-semibold text-slate-600">
+                Chọn ngày và giờ nợ cụ thể:
+              </label>
+              <input
+                type="datetime-local"
+                value={customDateTime}
+                onChange={(e) => setCustomDateTime(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[40px]"
+              />
+            </div>
+          )}
         </div>
 
         {/* Note / Dish Description */}
@@ -318,7 +432,7 @@ export const QuickAddForm: React.FC<QuickAddFormProps> = ({
 
           <button
             type="submit"
-            className="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+            className="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-base rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Check className="w-5 h-5" />
             <span>GHI NỢ NGAY ({formatCurrency(totalAmount)})</span>
