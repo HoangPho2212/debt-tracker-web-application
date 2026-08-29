@@ -493,18 +493,38 @@
         if (data && Array.isArray(data.records)) {
           const mergedMap = new Map();
           data.records.forEach(c => {
-            mergedMap.set(c.normalizedName || normalizeVi(c.name), c);
+            const key = normalizeVi(c.name);
+            mergedMap.set(key, { ...c, normalizedName: key });
           });
+
           records.forEach(l => {
-            const key = l.normalizedName || normalizeVi(l.name);
+            const key = normalizeVi(l.name);
             const ex = mergedMap.get(key);
             if (!ex) {
-              mergedMap.set(key, l);
+              mergedMap.set(key, { ...l, normalizedName: key });
             } else {
               const lTime = new Date(l.updatedAt).getTime() || 0;
               const cTime = new Date(ex.updatedAt).getTime() || 0;
               const dominant = lTime >= cTime ? l : ex;
-              mergedMap.set(key, dominant);
+
+              const historyMap = new Map();
+              (ex.history || []).forEach(h => historyMap.set(h.entryId, h));
+              (l.history || []).forEach(h => historyMap.set(h.entryId, h));
+              const mergedHistory = Array.from(historyMap.values()).sort((a, b) => {
+                return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+              });
+
+              mergedMap.set(key, {
+                id: ex.id || l.id,
+                name: lTime >= cTime ? l.name : ex.name,
+                normalizedName: key,
+                phone: dominant.phone || ex.phone || l.phone,
+                totalDebt: dominant.status === 'settled' ? 0 : dominant.totalDebt,
+                status: dominant.status,
+                createdAt: ex.createdAt || l.createdAt,
+                updatedAt: new Date(Math.max(lTime, cTime)).toISOString(),
+                history: mergedHistory
+              });
             }
           });
 

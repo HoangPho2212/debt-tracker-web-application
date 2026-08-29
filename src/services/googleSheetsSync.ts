@@ -1,32 +1,40 @@
-import {
-  DebtorRecord,
-  AppSettings,
-  GoogleSheetsSyncPayload,
-  GoogleSheetsSyncResult,
-  FetchCloudDataResult,
-} from '../types/contracts';
+import { DebtorRecord, AppSettings, FetchCloudDataResult } from '../types/contracts';
+import { normalizeVietnamese } from '../utils/vietnamese';
+
+export interface GoogleSheetsSyncResult {
+  success: boolean;
+  message: string;
+  syncedAt?: string;
+}
 
 export const GoogleSheetsSyncEngine = {
+  /**
+   * Validates if the Apps Script URL is a valid Google Apps Script Web App exec URL
+   */
   isValidAppsScriptUrl(url?: string): boolean {
     if (!url || typeof url !== 'string') return false;
     const trimmed = url.trim();
     return (
       trimmed.startsWith('https://script.google.com/macros/s/') &&
-      (trimmed.includes('/exec') || trimmed.includes('/dev'))
+      (trimmed.endsWith('/exec') || trimmed.endsWith('/dev') || trimmed.includes('/exec?'))
     );
   },
 
+  /**
+   * Validates if the Google Sheet URL is a valid Google Spreadsheet URL
+   */
   isValidGoogleSheetUrl(url?: string): boolean {
     if (!url || typeof url !== 'string') return false;
     const trimmed = url.trim();
     return (
-      trimmed.startsWith('https://docs.google.com/spreadsheets/') ||
+      trimmed.startsWith('https://docs.google.com/spreadsheets/d/') ||
+      trimmed.startsWith('https://spreadsheets.google.com/') ||
       trimmed.startsWith('https://sheets.google.com/')
     );
   },
 
   /**
-   * PUSH: Sends local records up to Google Sheets
+   * PUSH: Sends local records up to Google Sheets (via doPost)
    */
   async syncToGoogleSheets(
     records: DebtorRecord[],
@@ -35,26 +43,29 @@ export const GoogleSheetsSyncEngine = {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       return {
         success: false,
-        message: 'Mất kết nối mạng. Dữ liệu đã được lưu an toàn trên máy (LocalStorage).',
+        message: 'Thiết bị đang offline. Dữ liệu được lưu tạm trên máy.',
       };
     }
 
     if (!settings.appsScriptUrl || !this.isValidAppsScriptUrl(settings.appsScriptUrl)) {
       return {
         success: false,
-        message: 'Chưa cấu hình hoặc URL Google Apps Script không hợp lệ (/exec).',
+        message: 'Chưa cấu hình Google Apps Script URL hoặc URL không hợp lệ.',
       };
     }
 
-    const payload: GoogleSheetsSyncPayload = {
+    const payload = {
       app: 'QuanComDebtTracker',
       timestamp: new Date().toISOString(),
-      restaurantName: settings.restaurantName || 'Quán Cơm Bình Dân',
-      records,
+      restaurantName: settings.restaurantName || 'Sổ Ghi Nợ Quán Cơm',
+      records: records,
     };
 
+    const targetUrl = settings.appsScriptUrl.trim();
+    const nowIso = new Date().toISOString();
+
     try {
-      await fetch(settings.appsScriptUrl.trim(), {
+      await fetch(targetUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
@@ -63,10 +74,9 @@ export const GoogleSheetsSyncEngine = {
         body: JSON.stringify(payload),
       });
 
-      const nowIso = new Date().toISOString();
       return {
         success: true,
-        message: `Đã đồng bộ ${records.length} khách hàng lên Google Sheets!`,
+        message: 'Đã tự động đồng bộ lên Google Sheets thành công.',
         syncedAt: nowIso,
       };
     } catch (err: unknown) {
@@ -137,30 +147,41 @@ export const GoogleSheetsSyncEngine = {
   },
 
   /**
-   * Merge Strategy: Combines Local and Cloud records cleanly
+   * Merge Strategy: Combines Local and Cloud records cleanly with strict Vietnamese normalization and timestamp resolution
    */
   mergeCloudAndLocalRecords(
     localRecords: DebtorRecord[],
     cloudRecords: DebtorRecord[]
   ): DebtorRecord[] {
     if (!cloudRecords || cloudRecords.length === 0) return localRecords;
-    if (!localRecords || localRecords.length === 0) return cloudRecords;
+    if (!localRecords || localRecords.length === 0) {
+      return cloudRecords.map((c) => ({
+        ...c,
+        normalizedName: normalizeVietnamese(c.name),
+      }));
+    }
 
     const mergedMap = new Map<string, DebtorRecord>();
 
-    // 1. Add all cloud records first
+    // 1. Add all cloud records first indexed by strict normalized name
     for (const cloud of cloudRecords) {
-      const key = cloud.normalizedName || cloud.name.toLowerCase().trim();
-      mergedMap.set(key, { ...cloud });
+      const normName = normalizeVietnamese(cloud.name);
+      mergedMap.set(normName, {
+        ...cloud,
+        normalizedName: normName,
+      });
     }
 
     // 2. Merge local records
     for (const local of localRecords) {
-      const key = local.normalizedName || local.name.toLowerCase().trim();
-      const existing = mergedMap.get(key);
+      const normName = normalizeVietnamese(local.name);
+      const existing = mergedMap.get(normName);
 
       if (!existing) {
-        mergedMap.set(key, { ...local });
+        mergedMap.set(normName, {
+          ...local,
+          normalizedName: normName,
+        });
       } else {
         // Both exist: compare timestamps and merge histories
         const localUpdated = new Date(local.updatedAt).getTime() || 0;
@@ -178,15 +199,18 @@ export const GoogleSheetsSyncEngine = {
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
 
+        // Whichever record was updated most recently determines status and total debt
         const dominant = localUpdated >= cloudUpdated ? local : existing;
 
-        mergedMap.set(key, {
-          ...dominant,
+        mergedMap.set(normName, {
+          id: existing.id || local.id,
           name: localUpdated >= cloudUpdated ? local.name : existing.name,
+          normalizedName: normName,
           phone: dominant.phone || existing.phone || local.phone,
           history: mergedHistory,
           totalDebt: dominant.status === 'settled' ? 0 : dominant.totalDebt,
           status: dominant.status,
+          createdAt: existing.createdAt || local.createdAt,
           updatedAt: new Date(Math.max(localUpdated, cloudUpdated)).toISOString(),
         });
       }
